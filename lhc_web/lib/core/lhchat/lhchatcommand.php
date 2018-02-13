@@ -23,7 +23,10 @@ class erLhcoreClassChatCommand
         '!active' => 'self::activeChat',
         '!remark' => 'self::addRemark',
         '!info' => 'self::info',
-        '!help' => 'self::help'
+        '!help' => 'self::help',
+    	'!note' => 'self::notice',
+    	'!hold' => 'self::hold',
+    	'!transferforce' => 'self::transferforce'
     );
 
     private static function extractCommand($message)
@@ -49,7 +52,7 @@ class erLhcoreClassChatCommand
                 $params
             ));
         } else { // Perhaps some extension has implemented this command?
-            $commandResponse = erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.customcommand.' . $commandData['command'], $params);
+            $commandResponse = erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.customcommand', array('command' => $commandData['command'], 'params' => $params));
             
             if (isset($commandResponse['processed']) && $commandResponse['processed'] == true) {
                 return $commandResponse;
@@ -87,6 +90,66 @@ class erLhcoreClassChatCommand
             'process_status' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chatcommand', 'Nick changed!')
         );
     }
+    
+    /**
+     * Just adds message from operator
+     *
+     * @param array $params
+     *
+     * @return boolean
+     */
+    public static function notice($params)
+    {
+    	return array(
+    			'processed' => true,
+    			'process_status' => '',
+    			'raw_message' => $params['argument']
+    	);
+    }
+
+    /**
+     * Just adds message from operator
+     *
+     * @param array $params
+     *
+     * @return boolean
+     */
+    public static function hold($params)
+    {
+        $params['chat']->status_sub = erLhcoreClassModelChat::STATUS_SUB_ON_HOLD;
+
+        if ($params['argument'] != '') {
+            // Store as message to visitor
+            $msg = new erLhcoreClassModelmsg();
+            $msg->msg = $params['argument'];
+            $msg->chat_id = $params['chat']->id;
+            $msg->user_id = $params['user']->id;
+            $msg->time = time();
+            $msg->name_support = $params['user']->name_support;
+            $msg->saveThis();
+        }
+
+        // Reset auto responder on hold command
+        if ($params['chat']->auto_responder !== false) {
+            $params['chat']->auto_responder->active_send_status = 0;
+            $params['chat']->auto_responder->saveThis();
+        }
+
+        // Update last user msg time so auto responder work's correctly
+        $params['chat']->last_op_msg_time = $params['chat']->last_user_msg_time = time();
+
+        // All ok, we can make changes
+        erLhcoreClassChat::getSession()->update($params['chat']);
+
+        return array(
+            'custom_args' => array(
+              'hold_added' => true
+            ),
+            'processed' => true,
+            'raw_message' => '!hold',
+            'process_status' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chatcommand', 'Chat status changed on-hold!')
+        );
+    }
 
     /**
      * Updates chat email.
@@ -120,6 +183,70 @@ class erLhcoreClassChatCommand
         );
     }
 
+    /**
+     * Option to transfer user to another user via command line directly
+     * */
+    public static function transferforce($params)
+    {
+        $user = erLhcoreClassModelUser::findOne(array('filter' => array('username' => $params['argument'])));
+        
+        // Try find user by e-mail
+        if (!($user instanceof erLhcoreClassModelUser)) {
+            $user = erLhcoreClassModelUser::findOne(array('filter' => array('email' => $params['argument'])));
+        }
+        
+        if ($user instanceof erLhcoreClassModelUser) {
+            
+            $permissionsArray = erLhcoreClassRole::accessArrayByUserID($params['user']->id);
+            
+            if ($params['chat']->user_id == $params['user']->id || erLhcoreClassRole::canUseByModuleAndFunction($permissionsArray, 'lhchat', 'allowtransferdirectly')) {
+                                                
+                $params['chat']->user_id = $user->id;
+                $params['chat']->status_sub = erLhcoreClassModelChat::STATUS_SUB_OWNER_CHANGED;
+                $params['chat']->user_typing_txt = htmlspecialchars_decode(erTranslationClassLhTranslation::getInstance()->getTranslation('chat/accepttrasnfer','Chat has been transfered to'),ENT_QUOTES) . ' - ' . (string)$user;
+                $params['chat']->user_typing  = time();
+                     
+                // Change department if user cannot read current department, so chat appears in right menu
+                $filter = erLhcoreClassUserDep::parseUserDepartmetnsForFilter($user->id);
+                if ($filter !== true && !in_array($params['chat']->dep_id, $filter)) {
+                    $dep_id = erLhcoreClassUserDep::getDefaultUserDepartment($user->id);                    
+                    if ($dep_id > 0) {
+                        $params['chat']->dep_id = $dep_id;                       
+                    }
+                }
+                
+                $params['chat']->status_sub_sub = erLhcoreClassModelChat::STATUS_SUB_SUB_TRANSFERED;
+    
+                // Update UI
+                if (! isset($params['no_ui_update'])) {
+                    $params['chat']->operation_admin .= "lhinst.updateVoteStatus(" . $params['chat']->id . ");";
+                }
+    
+                // All ok, we can make changes
+                erLhcoreClassChat::getSession()->update($params['chat']);
+                
+                // Chat was transfered callback
+                erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.chat_transfered_force', array('chat' => & $params['chat']));
+                
+                return array(
+                    'processed' => true,
+                    'process_status' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/accepttrasnfer','Chat has been transfered to') . ' - ' . (string)$user
+                );
+            
+            } else {
+                return array(
+                    'processed' => true,
+                    'process_status' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chatcommand', 'You do not have permission to transfer chat directly!')
+                );
+            }            
+        } else {
+            return array(
+                'processed' => true,
+                'process_status' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chatcommand', 'User could not be found!')
+            );
+        }
+    }
+    
     /**
      * Updates chat phone
      *

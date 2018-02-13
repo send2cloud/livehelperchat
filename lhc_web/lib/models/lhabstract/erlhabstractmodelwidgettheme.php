@@ -27,9 +27,12 @@ class erLhAbstractModelWidgetTheme {
 			'need_help_close_bg'		=> $this->need_help_close_bg,
 			'need_help_close_hover_bg'	=> $this->need_help_close_hover_bg,
 			'need_help_image_path'		=> $this->need_help_image_path,
+			'show_need_help_delay'		=> $this->show_need_help_delay,
+			'show_status_delay'		    => $this->show_status_delay,
 			'custom_status_css'			=> $this->custom_status_css,
 			'custom_container_css'		=> $this->custom_container_css,
 			'custom_widget_css'			=> $this->custom_widget_css,
+			'custom_popup_css'			=> $this->custom_popup_css,
 			'need_help_header'			=> $this->need_help_header,
 			'need_help_text'			=> $this->need_help_text,
 			'online_text'				=> $this->online_text,
@@ -72,8 +75,13 @@ class erLhAbstractModelWidgetTheme {
 			'buble_operator_background' => $this->buble_operator_background,
 			'buble_operator_title_color'=> $this->buble_operator_title_color,
 			'buble_operator_text_color' => $this->buble_operator_text_color,
+
+			'hide_ts'                   => $this->hide_ts,
+			'widget_response_width'     => $this->widget_response_width,
 		);
 
+		erLhcoreClassChatEventDispatcher::getInstance()->dispatch('lhabstract.erlhabstractmodelwidgettheme.getstate',array('state' => & $stateArray, 'object' => & $this));
+		
 		return $stateArray;
 	}
 
@@ -428,13 +436,16 @@ class erLhAbstractModelWidgetTheme {
 	public $close_image_path = '';	
 	public $popup_image = '';
 	public $popup_image_path = '';	
-	public $name_company = '';	
+	public $custom_popup_css = '';
+	public $name_company = '';
 	public $header_height = 0;
 	public $header_padding = 0;
 	public $widget_border_width = 0;
 	public $show_need_help = 1;
 	public $show_need_help_timeout = 24;
-	
+	public $show_need_help_delay = 0;
+	public $show_status_delay = 0;
+
 	public $support_joined = '';
 	public $support_closed = '';
 	public $pending_join = '';
@@ -452,6 +463,9 @@ class erLhAbstractModelWidgetTheme {
 	public $buble_operator_background = ''; //DCF2FA
 	public $buble_operator_title_color = '';//8EC1D9
 	public $buble_operator_text_color = ''; //333333
+
+    public $hide_ts = 0;
+    public $widget_response_width = 0;
 
 	public $hide_add = false;
 	public $hide_delete = false;

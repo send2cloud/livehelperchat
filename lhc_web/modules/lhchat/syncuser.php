@@ -1,12 +1,15 @@
 <?php
-
+header ( 'content-type: application/json; charset=utf-8' );
 $timeCurrent = time();
 $pollingEnabled = (int)erLhcoreClassModelChatConfig::fetch('sync_sound_settings')->data['long_polling_enabled'];
 $pollingServerTimeout = (int)erLhcoreClassModelChatConfig::fetch('sync_sound_settings')->data['connection_timeout'];
 $pollingMessageTimeout = (float)erLhcoreClassModelChatConfig::fetch('sync_sound_settings')->data['polling_chat_message_sinterval'];
 
+$db = ezcDbInstance::get();
+$db->beginTransaction();
+
 try {
-    $chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $Params['user_parameters']['chat_id']);
+    $chat = erLhcoreClassModelChat::fetchAndLock($Params['user_parameters']['chat_id']);
     $chat->updateIgnoreColumns = array('last_msg_id');
     erLhcoreClassChat::setTimeZoneByChat($chat);
 } catch (Exception $e) {
@@ -28,38 +31,15 @@ $operatorId = 0;
 $responseArray = array();
 
 if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
-{
-       
-    
-	$db = ezcDbInstance::get();
-	$db->beginTransaction();
+{   
 	try {
 		while (true) {
-
-
-			// Auto responder
-            if ($chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT && $chat->wait_timeout_send <= 0 && $chat->wait_timeout > 0 && !empty($chat->timeout_message) && (time() - $chat->time) > ($chat->wait_timeout*($chat->wait_timeout_repeat-(abs($chat->wait_timeout_send))))) {
-                $errors = array();
-                erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_auto_responder_triggered',array('chat' => & $chat, 'errors' => & $errors));
-
-                if (empty($errors)) {
-                    erLhcoreClassChatWorkflow::timeoutWorkflow($chat);
-                } else {
-                    $msg = new erLhcoreClassModelmsg();
-                    $msg->msg = erTranslationClassLhTranslation::getInstance()->getTranslation('chat/adminchat','Auto responder got error').': '.implode('; ', $errors);
-                    $msg->chat_id = $chat->id;
-                    $msg->user_id = -1;
-                    $msg->time = time();
-
-                    if ($chat->last_msg_id < $msg->id) {
-                        $chat->last_msg_id = $msg->id;
-                    }
-
-                    erLhcoreClassChat::getSession()->save($msg);
-                }
-
-			}
-		
+	    
+		    if ($chat->auto_responder !== false) {
+		        $chat->auto_responder->chat = $chat;
+		        $chat->auto_responder->process();
+		    }
+		    		    		
 			if ($chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT && $chat->transfer_if_na == 1 && $chat->transfer_timeout_ts < (time()-$chat->transfer_timeout_ac) ) {
 		
 				$canExecuteWorkflow = true;
@@ -82,9 +62,16 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 					erLhcoreClassChatWorkflow::unreadInformWorkflow(array('department' => $department,'options' => $options),$chat);				
 				}			
 			}
-			
+
+            $validStatuses = array(
+                erLhcoreClassModelChat::STATUS_PENDING_CHAT,
+                erLhcoreClassModelChat::STATUS_ACTIVE_CHAT,
+            );
+
+            erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.validstatus_chat',array('chat' => & $chat, 'valid_statuses' => & $validStatuses));
+
 			// Sync only if chat is pending or active
-			if ($chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT || $chat->status == erLhcoreClassModelChat::STATUS_ACTIVE_CHAT) {
+			if (in_array($chat->status,$validStatuses)) {
 				// Check for new messages only if chat last message id is greater than user last message id
 				if ((int)$Params['user_parameters']['message_id'] < $chat->last_msg_id) {
 				    $Messages = erLhcoreClassChat::getPendingMessages((int)$Params['user_parameters']['chat_id'],(int)$Params['user_parameters']['message_id']);
@@ -108,6 +95,10 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 				        $firstNewMessage = current($Messages);
 				        $operatorId = $firstNewMessage['user_id'];
 				        
+				        if ($operatorId == -1) {
+				        	$operatorId = 0;
+				        }
+				        
 				        // Get Last message ID
 				        end($Messages);
 				        $LastMessageIDs = current($Messages);
@@ -120,6 +111,9 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 				}
 				
 				if ( $chat->is_operator_typing == true && $Params['user_parameters_unordered']['ot'] != 't' ) {
+				    
+				    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.syncuser.operator_typing',array('chat' => & $chat));
+				    
 					$ott = ($chat->operator_typing_user !== false) ? $chat->operator_typing_user->name_support . ' ' . erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chat','is typing now...') : erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chat','Operator is typing now...');
 					$breakSync = true;
 				}  elseif ($Params['user_parameters_unordered']['ot'] == 't' && $chat->is_operator_typing == false) {
@@ -154,6 +148,9 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 		        $tpl = erLhcoreClassTemplate::getInstance( 'lhchat/errors/chatclosed.tpl.php');
 		        $tpl->set('theme',$theme);
 		        $tpl->set('modeembed',isset($Params['user_parameters_unordered']['mode']) ? $Params['user_parameters_unordered']['mode'] : '');
+		        
+		        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_chat_closed_tpl',array('chat' => & $chat, 'tpl' => & $tpl));
+		        
 		        $status = $tpl->fetch();
 		        
 		    	$blocked = 'true';
@@ -161,17 +158,36 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 		    	
 		    	$responseArray['closed'] = true;
 		    }
-	
+		    
+		    // If there was two tabs open with same chat force chat close in another tab also
+		    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT) {
+		        $blocked = 'true';
+		        $breakSync = true;
+		        $responseArray['closed'] = true;
+		        $status = erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chat','You have closed this chat!');
+		    }
+		    
 		    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_OWNER_CHANGED) {
 		    	$checkStatus = 't';
 		    	$chat->status_sub = erLhcoreClassModelChat::STATUS_SUB_DEFAULT;
 		    	$saveChat = true;
 		    }
-	
-		    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_CONTACT_FORM) {
-		    	$checkStatus = 't';
+		    		    		    
+		    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_SURVEY_SHOW) {
+		    	$blocked = 'true';
+		    	$breakSync = true;		    	
+		    	$responseArray['closed'] = true;
+		    	$status = erTranslationClassLhTranslation::getInstance()->getTranslation('chat/chat','You have been redirected to survey!');
+		    	if ($chat->status_sub_arg != '') {		    	    
+		    	    $args = json_decode($chat->status_sub_arg,true);		    	    		    	    
+		    	    $responseArray['closed_arg'] = erLhcoreClassChatHelper::getSubStatusArguments($chat);		    	    
+		    	}
 		    }
-	
+
+		    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_CONTACT_FORM) {
+		        $checkStatus = 't';
+		    }
+		    
 		    if ($chat->operation != '') {	    	
 		    	$operation = explode("\n", trim($chat->operation));
 		    	$chat->operation = '';
@@ -190,9 +206,12 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 		    	$saveChat = true;
 		    }
 		    
-		    if ($saveChat === true) {
+		    if ($saveChat === true || $chat->lsync < time()-30) {
+		        $chat->lsync = time();
 		    	$chat->updateThis();
 		    }
+		    
+		    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.syncuser',array('chat' => & $chat, 'response' => & $responseArray));
 		    
 		    if ($pollingEnabled == false || $breakSync == true || ($pollingServerTimeout + $timeCurrent) < time() ) {	    	
 		    	break;
@@ -205,12 +224,16 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
 		    	}
 		    }
 		}
+		
 		$db->commit();
+
 	} catch (Exception $e) {
-	   $db->rollback();
+	    $db->rollback();
 	}  
 
-} else {
+} else {    
+    $db->rollback();
+    
     $content = 'false';
     $theme = false;
     
@@ -234,6 +257,9 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'])
     $tpl = erLhcoreClassTemplate::getInstance( 'lhchat/errors/chatclosed.tpl.php');
     $tpl->set('theme',$theme);
     $tpl->set('modeembed',$Params['user_parameters_unordered']['modeembed']);
+    
+    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_chat_closed_tpl',array('chat' => & $chat, 'tpl' => & $tpl));
+    
     $status = $tpl->fetch();
     
     $blocked = 'true';
@@ -250,7 +276,7 @@ $responseArray['result'] = trim($content) == '' ? 'false' : trim($content);
 $responseArray['status'] = $status;
 $responseArray['blocked'] = $blocked;
 
-echo json_encode($responseArray);
+echo erLhcoreClassChat::safe_json_encode($responseArray);
 exit;
 
 ?>

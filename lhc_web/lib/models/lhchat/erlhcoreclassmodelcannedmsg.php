@@ -2,7 +2,16 @@
 
 class erLhcoreClassModelCannedMsg
 {
-
+    use erLhcoreClassDBTrait;
+    
+    public static $dbTable = 'lh_canned_msg';
+    
+    public static $dbTableId = 'id';
+    
+    public static $dbSessionHandler = 'erLhcoreClassChat::getSession';
+    
+    public static $dbSortOrder = 'DESC';
+    
     public function getState()
     {
         return array(
@@ -18,21 +27,9 @@ class erLhcoreClassModelCannedMsg
             'attr_int_3' => $this->attr_int_3,
             'title' => $this->title,
             'explain' => $this->explain,
-            'fallback_msg' => $this->fallback_msg
+            'fallback_msg' => $this->fallback_msg,
+            'languages' => $this->languages,
         );
-    }
-
-    public static function fetch($id)
-    {
-        $msg = erLhcoreClassChat::getSession()->load('erLhcoreClassModelCannedMsg', (int) $id);
-        return $msg;
-    }
-
-    public function setState(array $properties)
-    {
-        foreach ($properties as $key => $val) {
-            $this->$key = $val;
-        }
     }
 
     public function __get($var)
@@ -84,117 +81,226 @@ class erLhcoreClassModelCannedMsg
                     return $this->message_title;
                 break;
                 
+            case 'tags':
+                    $this->tags = array();
+                    
+                    if ($this->id > 0) {
+                        $this->tags = erLhcoreClassModelCannedMsgTag::getList(array('innerjoin' => array('lh_canned_msg_tag_link' => array('lh_canned_msg_tag_link.tag_id','lh_canned_msg_tag.id')),'filter' => array('lh_canned_msg_tag_link.canned_id' => $this->id)));
+                    }
+                    
+                    return $this->tags;
+                break; 
+                   
+            case 'tags_plain':
+                    $tagsPlain = array();
+                    foreach ($this->tags as $tag) {
+                        $tagsPlain[] = $tag->tag;
+                    }
+                    $this->tags_plain = implode(', ', $tagsPlain);
+                    return $this->tags_plain;
+                break;
+                    
             default:
                 break;
         }
     }
 
+    public function afterSave()
+    {            
+        $tagLinks = erLhcoreClassModelCannedMsgTagLink::getList(array('filter' => array('canned_id' => $this->id)));
+                
+        $tagsArray = array();
+        $tagsArrayObj = array();
+        $tagsArrayLinkId = array();
+                
+        $tags = array();
+        foreach (array_unique(explode(',', strtolower($this->tags_plain))) as $tagKeyword) {
+            $tags[] = trim($tagKeyword);
+        }
+        
+        $tags = array_unique($tags);
+        
+        foreach ($tags as $tagKeyword) {
+            $tagKeywordTrimmed = trim($tagKeyword);
+            
+            $tag = erLhcoreClassModelCannedMsgTag::findOne(array('filter' => array('tag' => $tagKeywordTrimmed)));
+            
+            if (!($tag instanceof erLhcoreClassModelCannedMsgTag)) {                   
+                $tag = new erLhcoreClassModelCannedMsgTag();
+                $tag->tag = $tagKeywordTrimmed;
+                $tag->saveThis();
+            }
+            
+            $tagLink = erLhcoreClassModelCannedMsgTagLink::findOne(array('filter' => array('tag_id' => $tag->id, 'canned_id' => $this->id)));
+            
+            if (!($tagLink instanceof erLhcoreClassModelCannedMsgTagLink)) {
+                $tagLink = new erLhcoreClassModelCannedMsgTagLink();
+                $tagLink->tag_id = $tag->id;
+                $tagLink->canned_id = $this->id;
+                $tagLink->saveThis();
+            }
+            
+            // Update number of assigned canned messages to specific tag
+            $tag->cnt = erLhcoreClassModelCannedMsgTagLink::getCount(array('filter' => array('tag_id' => $tag->id)));
+            $tag->saveThis();
+            
+            $tagsArrayLinkId[] = $tagLink->id;
+            $tagsArrayObj[] = $tag;
+            $tagsArray[] = $tag->tag;
+        }
+        
+        $linksToRemove = array_diff(array_keys($tagLinks), $tagsArrayLinkId);
+        
+        if (!empty($linksToRemove)) {
+            $tagLinks = erLhcoreClassModelCannedMsgTagLink::getList(array('filterin' => array('id' => $linksToRemove)));
+            foreach ($tagLinks as $tagLink) {
+                $tagLink->removeThis();
+                
+                // It does not have any more associated shortucts to keyword, we can remove tag itself
+                if (erLhcoreClassModelCannedMsgTagLink::getCount(array('filter' => array('tag_id' => $tagLink->tag_id))) == 0) {
+                    $tag = erLhcoreClassModelCannedMsgTag::fetch($tagLink->tag_id);
+                    if ($tag instanceof erLhcoreClassModelCannedMsgTag) {
+                        $tag->removeThis();
+                    }
+                }
+            }
+        }
+        
+        $this->tags = $tag;
+        $this->tags_plain = implode(', ', $tagsArray);        
+    }
+    
+    public function afterRemove()
+    {
+        $tagLinks = erLhcoreClassModelCannedMsgTagLink::getList(array('filter' => array('canned_id' => $this->id)));
+        
+        foreach ($tagLinks as $tagLink) {
+            $tagLink->removeThis();
+        
+            // It does not have any more associated shortucts to keyword, we can remove tag itself
+            if (erLhcoreClassModelCannedMsgTagLink::getCount(array('filter' => array('tag_id' => $tagLink->tag_id))) == 0) {
+                $tag = erLhcoreClassModelCannedMsgTag::fetch($tagLink->tag_id);
+                if ($tag instanceof erLhcoreClassModelCannedMsgTag) {
+                    $tag->removeThis();
+                }
+            }
+        }        
+    }
+    
     public function setReplaceData($replaceData)
     {
         $this->replaceData = $replaceData;
     }
 
-    public static function getCount($params = array())
-    {
-        $session = erLhcoreClassChat::getSession();
-        $q = $session->database->createSelectQuery();
-        $q->select("COUNT(id)")->from("lh_canned_msg");
-        
-        if (isset($params['filter']) && count($params['filter']) > 0) {
-            $conditions = array();
-            
-            foreach ($params['filter'] as $field => $fieldValue) {
-                $conditions[] = $q->expr->eq($field, $q->bindValue($fieldValue));
-            }
-            
-            $q->where($conditions);
-        }
-        
-        $stmt = $q->prepare();
-        $stmt->execute();
-        $result = $stmt->fetchColumn();
-        
-        return $result;
-    }
-
-    public static function getList($paramsSearch = array())
-    {
-        $paramsDefault = array(
-            'limit' => 5000,
-            'offset' => 0
-        );
-        
-        $params = array_merge($paramsDefault, $paramsSearch);
-        
-        $session = erLhcoreClassChat::getSession();
-        $q = $session->createFindQuery('erLhcoreClassModelCannedMsg');
-        
-        $conditions = array();
-        
-        if (isset($params['filter']) && count($params['filter']) > 0) {
-            foreach ($params['filter'] as $field => $fieldValue) {
-                $conditions[] = $q->expr->eq($field, $q->bindValue($fieldValue));
-            }
-        }
-        
-        if (isset($params['filterin']) && count($params['filterin']) > 0) {
-            foreach ($params['filterin'] as $field => $fieldValue) {
-                $conditions[] = $q->expr->in($field, $fieldValue);
-            }
-        }
-        
-        if (isset($params['filterlt']) && count($params['filterlt']) > 0) {
-            foreach ($params['filterlt'] as $field => $fieldValue) {
-                $conditions[] = $q->expr->lt($field, $q->bindValue($fieldValue));
-            }
-        }
-        
-        if (isset($params['filtergt']) && count($params['filtergt']) > 0) {
-            foreach ($params['filtergt'] as $field => $fieldValue) {
-                $conditions[] = $q->expr->gt($field, $q->bindValue($fieldValue));
-            }
-        }
-        
-        if (isset($params['customfilter']) && count($params['customfilter']) > 0) {
-            foreach ($params['customfilter'] as $fieldValue) {
-                $conditions[] = $fieldValue;
-            }
-        }
-        
-        if (count($conditions) > 0) {
-            $q->where($conditions);
-        }
-        
-        $q->limit($params['limit'], $params['offset']);
-        
-        $q->orderBy(isset($params['sort']) ? $params['sort'] : 'position ASC, id ASC');
-        
-        $objects = $session->find($q);
-        
-        return $objects;
-    }
-
-    public static function getCannedMessages($department_id, $user_id)
+    public static function getCannedMessages($department_id, $user_id, $paramsFilter = array())
     {
         $session = erLhcoreClassChat::getSession();
         $q = $session->createFindQuery('erLhcoreClassModelCannedMsg');
-        $q->where($q->expr->lOr($q->expr->eq('department_id', $q->bindValue($department_id)), $q->expr->lAnd($q->expr->eq('department_id', $q->bindValue(0)), $q->expr->eq('user_id', $q->bindValue(0))), $q->expr->eq('user_id', $q->bindValue($user_id))));
         
-        $q->limit(5000, 0);
-        $q->orderBy('position ASC, title ASC');
-        $items = $session->find($q);
+        $filter = array();
+        $items = array();
+        
+        $response = erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.workflow.canned_message_filter', array(
+        		'params_filter' => $paramsFilter,
+        		'filter' => & $filter,
+        		'department_id' => $department_id,
+        		'user_id' => $user_id,
+        		'q' => $q,
+        		'items' => & $items,
+        		'session' => & $session
+        ));
+        
+        if ($response === false) {
+	        // Extension did not changed any filters, use default        
+	        $filter[] = $q->expr->lOr($q->expr->eq('department_id', $q->bindValue($department_id)), $q->expr->lAnd($q->expr->eq('department_id', $q->bindValue(0)), $q->expr->eq('user_id', $q->bindValue(0))), $q->expr->eq('user_id', $q->bindValue($user_id)));
+	
+	        if (isset($paramsFilter['q']) && $paramsFilter['q'] != '') {
+	            $filter[] = $q->expr->like('msg', $q->bindValue('%' . $paramsFilter['q'] . '%'));
+	        }
+
+	        if (isset($paramsFilter['id']) && !empty($paramsFilter['id'])) {
+	            $filter[] = $q->expr->in('id', $paramsFilter['id']);
+	        }
+	        
+	        $q->where($filter);
+	       
+	        $q->limit(5000, 0);
+	        $q->orderBy('position ASC, title ASC');
+	        $items = $session->find($q);
+        }
         
         return $items;
     }
+    
+    public static function groupItems($items, $chat, $user)
+    {  
+        $replaceArray = array(
+            '{nick}' => $chat->nick,
+            '{email}' => $chat->email,
+            '{phone}' => $chat->phone,
+            '{operator}' => $user->name_support
+        );
+        
+        $additionalData = $chat->additional_data_array;
+        
+        if (is_array($additionalData)) {
+            foreach ($additionalData as $row) {
+                if (isset($row->identifier) && $row->identifier != '') {
+                    $replaceArray['{' . $row->identifier . '}'] = $row->value;
+                }
+            }
+        }
 
-    public function removeThis()
-    {
-        erLhcoreClassChat::getSession()->delete($this);
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.workflow.canned_message_replace', array(
+            'chat' => $chat,
+            'replace_array' => & $replaceArray,
+            'user' => $user
+        ));
+        
+        $grouped = array();
+        
+        foreach ($items as $item) {
+
+            // Set proper message by language
+            $item->setMessageByChatLocale($chat->chat_locale);
+
+            // Set replace data
+            $item->setReplaceData($replaceArray);
+            
+            $type = $item->department_id > 0 ? 0 : ($item->user_id > 0 ? 1 : 2);
+            $id = $item->department_id > 0 ? $item->department_id : ($item->user_id > 0 ? $item->user_id : 0);
+            
+            $grouped[$type . '_' . $id][] = $item;
+        }
+        
+        return $grouped;
     }
 
-    public function saveThis()
-    {
-        erLhcoreClassChat::getSession()->saveOrUpdate($this);
+    /**
+     * @desc Finds message in proper locale if it exists
+     *
+     * @param $locale
+     */
+    public function setMessageByChatLocale($locale) {
+        if ($locale != '' && $this->languages != '') {
+            $languages = json_decode($this->languages, true);
+
+            if (is_array($languages)) {
+                foreach ($languages as $data) {
+                    if (in_array($locale, $data['languages'])) {
+
+                        if ($data['message'] != '') {
+                            $this->msg = $data['message'];
+                        }
+
+                        if ($data['fallback_message'] != '') {
+                            $this->fallback_msg = $data['fallback_message'];
+                        }
+                        return ;
+                    }
+                }
+            }
+        }
     }
 
     private $replaceData = array();
@@ -206,6 +312,8 @@ class erLhcoreClassModelCannedMsg
     public $title = '';
 
     public $explain = '';
+
+    public $languages = '';
 
     public $fallback_msg = '';
 

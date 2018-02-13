@@ -256,11 +256,19 @@ switch ((int)$Params['user_parameters']['step_id']) {
     	       /*DATABASE TABLES SETUP*/
     	       $db = ezcDbInstance::get();
 
+    	       try {
+                   $db->query("set global innodb_large_prefix = 1");
+			   } catch (Exception $e) {
+    	       		// Just ignore if not succeed
+			   }
+
+
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
-				  `nick` varchar(50) NOT NULL,
+				  `nick` varchar(100) NOT NULL,
 				  `status` int(11) NOT NULL DEFAULT '0',
 				  `status_sub` int(11) NOT NULL DEFAULT '0',
+				  `status_sub_sub` int(11) NOT NULL DEFAULT '0',
 				  `time` int(11) NOT NULL,
 				  `user_id` int(11) NOT NULL,
 				  `hash` varchar(40) NOT NULL,
@@ -270,7 +278,9 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   	  `remarks` text NOT NULL,
 				  `ip` varchar(100) NOT NULL,
 				  `dep_id` int(11) NOT NULL,
+				  `sender_user_id` int(11) NOT NULL,
 				  `product_id` int(11) NOT NULL,
+				  `usaccept` int(11) NOT NULL DEFAULT '0',
 				  `user_status` int(11) NOT NULL DEFAULT '0',
 				  `user_closed_ts` int(11) NOT NULL DEFAULT '0',
 				  `support_informed` int(11) NOT NULL DEFAULT '0',
@@ -284,7 +294,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `country_name` varchar(100) NOT NULL,
 				  `unanswered_chat` int(11) NOT NULL,
 				  `user_typing` int(11) NOT NULL,
-				  `user_typing_txt` varchar(50) NOT NULL,
+				  `user_typing_txt` varchar(200) NOT NULL,
 				  `operator_typing` int(11) NOT NULL,
         	   	  `operator_typing_id` int(11) NOT NULL,
 				  `phone` varchar(100) NOT NULL,
@@ -292,23 +302,24 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `last_user_msg_time` int(11) NOT NULL,
 				  `fbst` tinyint(1) NOT NULL,
 				  `online_user_id` int(11) NOT NULL,
+				  `auto_responder_id` int(11) NOT NULL,
 				  `last_msg_id` int(11) NOT NULL,
-				  `additional_data` text NOT NULL,
-				  `timeout_message` varchar(250) NOT NULL,
+				  `lsync` int(11) NOT NULL,
+				  `transfer_uid` int(11) NOT NULL,
+				  `additional_data` text NOT NULL,				  
 				  `user_tz_identifier` varchar(50) NOT NULL,
 				  `lat` varchar(10) NOT NULL,
 				  `lon` varchar(10) NOT NULL,
 				  `city` varchar(100) NOT NULL,
 				  `operation` text NOT NULL,
 				  `operation_admin` varchar(200) NOT NULL,
+				  `status_sub_arg` varchar(200) NOT NULL,
+				  `uagent` varchar(250) NOT NULL,
 				  `chat_locale` varchar(10) NOT NULL,
 				  `chat_locale_to` varchar(10) NOT NULL,
 				  `mail_send` int(11) NOT NULL,
         	   	  `screenshot_id` int(11) NOT NULL,
         	   	  `wait_time` int(11) NOT NULL,
-        	   	  `wait_timeout` int(11) NOT NULL,
-        	   	  `wait_timeout_send` int(11) NOT NULL,
-        	   	  `wait_timeout_repeat` int(11) NOT NULL,
   				  `chat_duration` int(11) NOT NULL,
   				  `tslasign` int(11) NOT NULL,
         	   	  `priority` int(11) NOT NULL,
@@ -317,11 +328,13 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   	  `transfer_timeout_ac` int(11) NOT NULL,
         	   	  `transfer_if_na` int(11) NOT NULL,
         	   	  `na_cb_executed` int(11) NOT NULL,
+        	   	  `device_type` int(11) NOT NULL,
         	   	  `nc_cb_executed` tinyint(1) NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `status_user_id` (`status`,`user_id`),
-				  KEY `user_id` (`user_id`),
+				  KEY `user_id_sender_user_id` (`user_id`, `sender_user_id`),
 				  KEY `unanswered_chat` (`unanswered_chat`),
+				  KEY `sender_user_id` (`sender_user_id`),
 				  KEY `online_user_id` (`online_user_id`),
 				  KEY `dep_id` (`dep_id`),
 				  KEY `product_id` (`product_id`),
@@ -330,7 +343,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  KEY `status_dep_id_id` (`status`,`dep_id`,`id`),
         	   	  KEY `status_dep_id_priority_id` (`status`,`dep_id`,`priority`,`id`),
         	   	  KEY `status_priority_id` (`status`,`priority`,`id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat_blocked_user` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -339,27 +352,84 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `datets` int(11) NOT NULL,
                   PRIMARY KEY (`id`),
                   KEY `ip` (`ip`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_users_online_session` ( 
+        	       `id` bigint(20) NOT NULL AUTO_INCREMENT, 
+        	       `user_id` int(11) NOT NULL, 
+        	       `time` int(11) NOT NULL, 
+        	       `duration` int(11) NOT NULL, 
+        	       `lactivity` int(11) NOT NULL, 
+        	       PRIMARY KEY (`id`), 
+        	       KEY `user_id_lactivity` (`user_id`, `lactivity`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_chat_start_settings` ( 
+        	       `id` int(11) NOT NULL AUTO_INCREMENT, 
+        	       `name` varchar(50) NOT NULL, 
+        	       `data` longtext NOT NULL, 
+        	       `department_id` int(11) NOT NULL, 
+        	       PRIMARY KEY (`id`), 
+        	       KEY `department_id` (`department_id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat_archive_range` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
         	   `range_from` int(11) NOT NULL,
         	   `range_to` int(11) NOT NULL,
+        	   `year_month` int(11) NOT NULL,
+        	   `older_than` int(11) NOT NULL,
+        	   `last_id` int(11) NOT NULL,
+        	   `first_id` int(11) NOT NULL,
         	   PRIMARY KEY (`id`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
-        	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_auto_responder` (
-				  `id` int(11) NOT NULL AUTO_INCREMENT,
-				  `siteaccess` varchar(3) NOT NULL,
-				  `wait_message` varchar(250) NOT NULL,
-				  `wait_timeout` int(11) NOT NULL,
-				  `position` int(11) NOT NULL,
-				  `dep_id` int(11) NOT NULL,
-        	      `repeat_number` int(11) NOT NULL DEFAULT '1',
-				  `timeout_message` varchar(250) NOT NULL,
-				  PRIMARY KEY (`id`),
-				  KEY `siteaccess_position` (`siteaccess`,`position`)
-				) DEFAULT CHARSET=utf8;");
+        	   $db->query("CREATE TABLE `lh_abstract_auto_responder` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `siteaccess` varchar(3) NOT NULL,
+                  `wait_message` text NOT NULL,
+                  `wait_timeout` int(11) NOT NULL,
+                  `position` int(11) NOT NULL,
+                  `timeout_message` text NOT NULL,
+                  `name` varchar(50) NOT NULL,
+                  `operator` varchar(50) NOT NULL,
+                  `dep_id` int(11) NOT NULL,
+                  `only_proactive` int(11) NOT NULL,
+                  `repeat_number` int(11) NOT NULL DEFAULT '1',
+                  `survey_timeout` int(11) NOT NULL DEFAULT '0',
+                  `survey_id` int(11) NOT NULL DEFAULT '0',
+                  `wait_timeout_hold_1` int(11) NOT NULL,
+                  `wait_timeout_hold_2` int(11) NOT NULL,
+                  `wait_timeout_hold_3` int(11) NOT NULL,
+                  `wait_timeout_hold_4` int(11) NOT NULL,
+                  `wait_timeout_hold_5` int(11) NOT NULL,
+                  `timeout_hold_message_1` text NOT NULL,
+                  `timeout_hold_message_2` text NOT NULL,
+                  `timeout_hold_message_3` text NOT NULL,
+                  `timeout_hold_message_4` text NOT NULL,
+                  `timeout_hold_message_5` text NOT NULL,
+                  `wait_timeout_hold` text NOT NULL,
+                  `wait_timeout_2` int(11) NOT NULL,
+                  `timeout_message_2` text NOT NULL,
+                  `wait_timeout_3` int(11) NOT NULL,
+                  `timeout_message_3` text NOT NULL,
+                  `wait_timeout_4` int(11) NOT NULL,
+                  `timeout_message_4` text NOT NULL,
+                  `wait_timeout_5` int(11) NOT NULL,
+                  `timeout_message_5` text NOT NULL,
+                  `wait_timeout_reply_1` int(11) NOT NULL,
+                  `timeout_reply_message_1` text NOT NULL,
+                  `wait_timeout_reply_2` int(11) NOT NULL,
+                  `timeout_reply_message_2` text NOT NULL,
+                  `wait_timeout_reply_3` int(11) NOT NULL,
+                  `timeout_reply_message_3` text NOT NULL,
+                  `wait_timeout_reply_4` int(11) NOT NULL,
+                  `timeout_reply_message_4` text NOT NULL,
+                  `wait_timeout_reply_5` int(11) NOT NULL,
+                  `timeout_reply_message_5` text NOT NULL,
+                  `languages` text NOT NULL,
+                  `ignore_pa_chat` int(11) NOT NULL,
+                  PRIMARY KEY (`id`),
+                  KEY `siteaccess_position` (`siteaccess`,`position`)
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_widget_theme` (
 				 `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -386,6 +456,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                  `custom_status_css` text NOT NULL,
                  `custom_container_css` text NOT NULL,
                  `custom_widget_css` text NOT NULL,
+                 `custom_popup_css` text NOT NULL,
                  `need_help_header` varchar(250) NOT NULL,
                  `need_help_text` varchar(250) NOT NULL,
                  `online_text` varchar(250) NOT NULL,
@@ -413,12 +484,16 @@ switch ((int)$Params['user_parameters']['step_id']) {
                  `noonline_operators` varchar(250) NOT NULL,
                  `noonline_operators_offline` varchar(250) NOT NULL,
                  `hide_close` int(11) NOT NULL,
+                 `show_need_help_delay` int(11) NOT NULL DEFAULT '0',
+                 `show_status_delay` int(11) NOT NULL DEFAULT '0',
                  `hide_popup` int(11) NOT NULL,
                  `show_need_help` int(11) NOT NULL DEFAULT '1',
                  `show_need_help_timeout` int(11) NOT NULL DEFAULT '24',
                  `header_height` int(11) NOT NULL,
                  `header_padding` int(11) NOT NULL,
                  `widget_border_width` int(11) NOT NULL,
+                 `hide_ts` int(11) NOT NULL,
+                 `widget_response_width` int(11) NOT NULL,
                  `show_voting` tinyint(1) NOT NULL DEFAULT '1',
                  `department_title` varchar(250) NOT NULL,
                  `department_select` varchar(250) NOT NULL,
@@ -429,7 +504,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                  `buble_operator_title_color` varchar(250) NOT NULL,
                  `buble_operator_text_color` varchar(250) NOT NULL,
                   PRIMARY KEY (`id`)				
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_faq` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -443,11 +518,11 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `is_wildcard` tinyint(1) NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `active` (`active`),
-				  KEY `active_url` (`active`,`url`),
+				  KEY `active_url_2` (`active`,`url`(191)),
 				  KEY `has_url` (`has_url`),
 				  KEY `identifier` (`identifier`),
 				  KEY `is_wildcard` (`is_wildcard`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_cobrowse` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -465,11 +540,12 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   PRIMARY KEY (`id`),
         	   KEY `chat_id` (`chat_id`),
         	   KEY `online_user_id` (`online_user_id`)
-        	   ) DEFAULT CHARSET=utf8");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         	           	   
         	   $db->query("CREATE TABLE `lh_abstract_survey` (
         	      `id` int(11) NOT NULL AUTO_INCREMENT,
                   `name` varchar(250) NOT NULL,
+                  `feedback_text` text NOT NULL,
                   `max_stars_1_title` varchar(250) NOT NULL,
                   `max_stars_1_pos` int(11) NOT NULL,
                   `max_stars_2_title` varchar(250) NOT NULL,
@@ -541,7 +617,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `question_plain_4_req` int(11) NOT NULL,
                   `question_plain_5_req` int(11) NOT NULL,
                   PRIMARY KEY (`id`)
-        	   ) DEFAULT CHARSET=utf8");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         	   $db->query("CREATE TABLE `lh_admin_theme` (
         	       `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -552,7 +628,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	       `header_content` text NOT NULL,
         	       `header_css` text NOT NULL,
         	       PRIMARY KEY (`id`)
-        	   ) DEFAULT CHARSET=utf8");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         	   $db->query("CREATE TABLE `lh_chat_paid` ( 
         	       `id` int(11) NOT NULL AUTO_INCREMENT,  
@@ -560,11 +636,12 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	       `chat_id` int(11) NOT NULL, 
         	        PRIMARY KEY (`id`),  
         	       KEY `hash` (`hash`),  
-        	       KEY `chat_id` (`chat_id`)) DEFAULT CHARSET=utf8");
+        	       KEY `chat_id` (`chat_id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_survey_item` (
         	      `id` bigint(20) NOT NULL AUTO_INCREMENT,
 				  `survey_id` int(11) NOT NULL,
+				  `status` int(11) NOT NULL,
 				  `chat_id` int(11) NOT NULL,
 				  `user_id` int(11) NOT NULL,
 				  `ftime` int(11) NOT NULL,
@@ -600,23 +677,26 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  KEY `question_options_3` (`question_options_3`),
 				  KEY `question_options_4` (`question_options_4`),
 				  KEY `question_options_5` (`question_options_5`)
-        	   ) DEFAULT CHARSET=utf8");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_speech_language` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
                   `name` varchar(100) NOT NULL,
                   PRIMARY KEY (`id`)
-               ) DEFAULT CHARSET=utf8");
+               ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	           	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_speech_language_dialect` (
-                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                `id` int(11) NOT NULL AUTO_INCREMENT,
                   `language_id` int(11) NOT NULL,
                   `lang_name` varchar(100) NOT NULL,
                   `lang_code` varchar(100) NOT NULL,
+                  `short_code` varchar(4) NOT NULL DEFAULT '',
                   PRIMARY KEY (`id`),
-                  KEY `language_id` (`language_id`)
-               ) DEFAULT CHARSET=utf8");
-        	   
+                  KEY `language_id` (`language_id`),
+                  KEY `short_code` (`short_code`),
+                  KEY `lang_code` (`lang_code`)
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
         	   $db->query("INSERT INTO `lh_speech_language` (`id`, `name`) VALUES
         	   (1,	'Afrikaans'),
         	   (2,	'Bahasa Indonesia'),
@@ -722,7 +802,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `dialect` varchar(50) NOT NULL,
                   PRIMARY KEY (`id`),
                   KEY `chat_id` (`chat_id`)
-               ) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
+               ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat_file` (
         	   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -740,7 +820,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   KEY `chat_id` (`chat_id`),
         	   KEY `online_user_id` (`online_user_id`),
         	   KEY `user_id` (`user_id`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_email_template` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -758,21 +838,21 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `reply_to_ac` tinyint(4) NOT NULL,
 				  `recipient` varchar(150) NOT NULL,
 				  PRIMARY KEY (`id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
-        	   $db->query("INSERT INTO `lh_abstract_email_template` (`id`, `name`, `from_name`, `from_name_ac`, `from_email`, `from_email_ac`, `user_mail_as_sender`, `content`, `subject`, `subject_ac`, `reply_to`, `reply_to_ac`, `recipient`,`bcc_recipients`) VALUES
-        	   		(1,'Send mail to user','Live Helper Chat',0,'',0, 0,'Dear {user_chat_nick},\r\n\r\n{additional_message}\r\n\r\nLive Support response:\r\n{messages_content}\r\n\r\nSincerely,\r\nLive Support Team\r\n','{name_surname} has responded to your request',	1,'',1,'',''),
-        	   		(2,'Support request from user',	'',	0,	'',	0,	 0,'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nAdditional data, if any:\r\n{additional_data}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nLink to chat if any:\r\n{prefillchat}\r\n\r\nSincerely,\r\nLive Support Team',	'Support request from user',	0,	'',	0,	'{$adminEmail}',''),
-        	   		(3,	'User mail for himself',	'Live Helper Chat',	0,	'',	0,	 0,'Dear {user_chat_nick},\r\n\r\nTranscript:\r\n{messages_content}\r\n\r\nSincerely,\r\nLive Support Team\r\n',	'Chat transcript',	0,	'',	0,	'',''),
-        	   		(4,	'New chat request',	'Live Helper Chat',	0,	'',	0,	 0,'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSincerely,\r\nLive Support Team',	'New chat request',	0,	'',	0,	'{$adminEmail}',''),
-        	   		(5,	'Chat was closed',	'Live Helper Chat',	0,	'',	0,	 0,'Hello,\r\n\r\n{operator} has closed a chat\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nAdditional data, if any:\r\n{additional_data}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nSincerely,\r\nLive Support Team',	'Chat was closed',	0,	'',	0,	'',''),
-        	   		(6,	'New FAQ question',	'Live Helper Chat',	0,	'',	0,	 0,'Hello,\r\n\r\nNew FAQ question\r\nEmail: {email}\r\n\r\nQuestion:\r\n{question}\r\n\r\nQuestion URL:\r\n{url_question}\r\n\r\nURL to answer a question:\r\n{url_request}\r\n\r\nSincerely,\r\nLive Support Team',	'New FAQ question',	0,	'',	0,	'',	''),
-        	   		(7,	'New unread message',	'Live Helper Chat',	0,	'',	0,	 0,'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSincerely,\r\nLive Support Team',	'New chat request',	0,	'',	0,	'{$adminEmail}',''),
-        	   		(8,	'Filled form',	'Live Helper Chat',	0,	'',	0,	 0,'Hello,\r\n\r\nUser has filled a form\r\nForm name - {form_name}\r\nUser IP - {ip}\r\nDownload filled data - {url_download}\r\nIdentifier - {identifier}\r\nView filled data - {url_view}\r\n\r\n {content} \r\n\r\nSincerely,\r\nLive Support Team','Filled form - {form_name}',	0,	'',	0,	'{$adminEmail}',''),
-        	   		(9,	'Chat was accepted',	'Live Helper Chat',	0,	'',	0,	 0, 'Hello,\r\n\r\nOperator {user_name} has accepted a chat [{chat_id}]\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSincerely,\r\nLive Support Team',	'Chat was accepted [{chat_id}]',	0,	'',	0,	'{$adminEmail}',''),
-        	        (10, 'Permission request',	'Live Helper Chat',	0,	'',	0,	0, 'Hello,\r\n\r\nOperator {user} has requested these permissions\n\r\n{permissions}\r\n\r\nSincerely,\r\nLive Support Team',	'Permission request from {user}',	0,	'',	0,	'{$adminEmail}',''),
-        	        (11, 'You have unread messages',	'Live Helper Chat',	0,	'',	0, 0,	'Hello,\r\n\r\nOperator {operator} has answered to you\r\n\r\n{messages}\r\n\r\nSincerely,\r\nLive Support Team','Operator has answered to your request',0,'',0,'{$adminEmail}','');");
-
+        	   $db->query("INSERT INTO `lh_abstract_email_template` (`id`, `name`, `from_name`, `from_name_ac`, `from_email`, `from_email_ac`, `content`, `subject`, `subject_ac`, `reply_to`, `reply_to_ac`, `recipient`, `bcc_recipients`, `user_mail_as_sender`) VALUES
+            	   (1,	'Send mail to user',	'Live Helper Chat',	0,	'',	0,	'Dear {user_chat_nick},\r\n\r\n{additional_message}\r\n\r\nLive Support response:\r\n{messages_content}\r\n\r\nSincerely,\r\nLive Support Team\r\n',	'{name_surname} has responded to your request',	1,	'',	1,	'',	'',	0),
+            	   (2,	'Support request from user',	'',	0,	'',	0,	'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\n\r\nMessage:\r\n{message}\r\n\r\nAdditional data, if any:\r\n{additional_data}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nLink to chat if any:\r\n{prefillchat}\r\n\r\nSincerely,\r\nLive Support Team',	'{name}, {country}, {department}, Support request from user',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (3,	'User mail for himself',	'Live Helper Chat',	0,	'',	0,	'Dear {user_chat_nick},\r\n\r\nTranscript:\r\n{messages_content}\r\nChat ID: {chat_id}\n\r\nSincerely,\r\nLive Support Team\r\n',	'Chat transcript',	0,	'',	0,	'',	'',	0),
+            	   (4,	'New chat request',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\nCreated:	{created}\r\nUser left:	{user_left}\r\nWaited:	{waited}\r\nChat duration:	{chat_duration}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSurvey\r\n{survey}\r\n\r\nSincerely,\r\nLive Support Team',	'New chat request',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (5,	'Chat was closed',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\n{operator} has closed a chat\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\nCreated:	{created}\r\nUser left:	{user_left}\r\nWaited:	{waited}\r\nChat duration:	{chat_duration}\r\n\r\nMessage:\r\n{message}\r\n\r\nAdditional data, if any:\r\n{additional_data}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nSurvey:\r\n{survey}\r\n\r\nSincerely,\r\nLive Support Team',	'Chat was closed',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (6,	'New FAQ question',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nNew FAQ question\r\nEmail: {email}\r\n\r\nQuestion:\r\n{question}\r\n\r\nQuestion URL:\r\n{url_question}\r\n\r\nURL to answer a question:\r\n{url_request}\r\n\r\nSincerely,\r\nLive Support Team',	'New FAQ question',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (7,	'New unread message',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\nCreated:	{created}\r\nUser left:	{user_left}\r\nWaited:	{waited}\r\nChat duration:	{chat_duration}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSurvey:\r\n{survey}\r\n\r\nSincerely,\r\nLive Support Team',	'New unread message',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (8,	'Filled form',	'MCFC',	0,	'',	0,	'Hello,\r\n\r\nUser has filled a form\r\nForm name - {form_name}\r\nUser IP - {ip}\r\nDownload filled data - {url_download}\r\nView filled data - {url_view}\r\n\r\n{content}\r\n\r\nSincerely,\r\nLive Support Team',	'Filled form - {form_name}',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (9,	'Chat was accepted',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nOperator {user_name} has accepted a chat [{chat_id}]\r\n\r\nUser request data:\r\nName: {name}\r\nEmail: {email}\r\nPhone: {phone}\r\nDepartment: {department}\r\nCountry: {country}\r\nCity: {city}\r\nIP: {ip}\r\nCreated:	{created}\r\nUser left:	{user_left}\r\nWaited:	{waited}\r\nChat duration:	{chat_duration}\r\n\r\nMessage:\r\n{message}\r\n\r\nURL of page from which user has send request:\r\n{url_request}\r\n\r\nClick to accept chat automatically\r\n{url_accept}\r\n\r\nSurvey:\r\n{survey}\r\n\r\nSincerely,\r\nLive Support Team',	'Chat was accepted [{chat_id}]',	0,	'',	0,	'{$adminEmail}',	'',	0),
+            	   (10,	'Permission request',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nOperator {user} has requested these permissions\n\r\n{permissions}\r\n\r\nSincerely,\r\nLive Support Team',	'Permission request from {user}',	0,	'',	0,	'',	'',	0),
+            	   (11,	'You have unread messages',	'Live Helper Chat',	0,	'',	0,	'Hello,\r\n\r\nOperator {operator} has answered to you\r\n\r\n{messages}\r\n\r\nSincerely,\r\nLive Support Team',	'Operator has answered to your request',	0,	'',	0,	'',	'',	0);");
+            	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_question` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
         	   `question` varchar(250) NOT NULL,
@@ -785,7 +865,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   PRIMARY KEY (`id`),
         	   KEY `priority` (`priority`),
         	   KEY `active_priority` (`active`,`priority`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_question_answer` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -796,7 +876,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   PRIMARY KEY (`id`),
         	   KEY `ip` (`ip`),
         	   KEY `question_id` (`question_id`)
-        	   ) DEFAULT CHARSET=utf8");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_question_option` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -805,7 +885,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   `priority` tinyint(4) NOT NULL,
         	   PRIMARY KEY (`id`),
         	   KEY `question_id` (`question_id`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_question_option_answer` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -816,7 +896,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   PRIMARY KEY (`id`),
         	   KEY `question_id` (`question_id`),
         	   KEY `ip` (`ip`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_product` (
         	       `id` int(11) NOT NULL AUTO_INCREMENT, 
@@ -825,7 +905,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	       `priority` int(11) NOT NULL, 
         	       `departament_id` int(11) NOT NULL, 
         	       KEY `departament_id` (`departament_id`), 
-        	       PRIMARY KEY (`id`)) DEFAULT CHARSET=utf8;");
+        	       PRIMARY KEY (`id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_browse_offer_invitation` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -851,7 +931,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  PRIMARY KEY (`id`),
 				  KEY `active` (`active`),
 				  KEY `identifier` (`identifier`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_form` (
@@ -866,7 +946,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   `pagelayout` varchar(200) NOT NULL,
         	   `post_content` text NOT NULL,
         	   PRIMARY KEY (`id`)
-        	   ) DEFAULT CHARSET=utf8;");        	   
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	           	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_form_collected` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -877,7 +957,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `content` longtext NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `form_id` (`form_id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chatbox` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -887,7 +967,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `active` int(11) NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `identifier` (`identifier`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_canned_msg` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -895,6 +975,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `fallback_msg` text NOT NULL,
                   `title` varchar(250) NOT NULL,
                   `explain` varchar(250) NOT NULL,
+                  `languages` text NOT NULL,
         	   	  `position` int(11) NOT NULL,
         	   	  `department_id` int(11) NOT NULL,
         	   	  `user_id` int(11) NOT NULL,
@@ -908,36 +989,92 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   	  KEY `attr_int_1` (`attr_int_1`),
         	   	  KEY `attr_int_2` (`attr_int_2`),
         	   	  KEY `attr_int_3` (`attr_int_3`),
-        	   	  KEY `position_title` (`position`, `title`),
+        	   	  KEY `position_title_v2` (`position`, `title`(191)),
         	   	  KEY `user_id` (`user_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat_online_user_footprint` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
 				  `chat_id` int(11) NOT NULL,
 				  `online_user_id` int(11) NOT NULL,
 				  `page` varchar(250) NOT NULL,
-				  `vtime` varchar(250) NOT NULL,
+				  `vtime` int(11) NOT NULL,
 				  PRIMARY KEY (`id`),
-				  KEY `chat_id_vtime` (`chat_id`,`vtime`),
+				  KEY `chat_id` (`chat_id`),
 				  KEY `online_user_id` (`online_user_id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_abstract_proactive_chat_event` (
+        	       `id` int(11) NOT NULL AUTO_INCREMENT,
+        	       `vid_id` int(11) NOT NULL,
+        	       `ev_id` int(11) NOT NULL,
+        	       `ts` int(11) NOT NULL,
+        	       `val` varchar(50) NOT NULL,
+        	       PRIMARY KEY (`id`),
+        	       KEY `vid_id_ev_id_val_ts` (`vid_id`,`ev_id`,`val`,`ts`),
+        	       KEY `vid_id_ev_id_ts` (`vid_id`,`ev_id`,`ts`)
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
+        	   $db->query("CREATE TABLE `lh_abstract_proactive_chat_invitation_event` (
+        	       `id` int(11) NOT NULL AUTO_INCREMENT,
+        	       `invitation_id` int(11) NOT NULL,
+        	       `event_id` int(11) NOT NULL,
+        	       `min_number` int(11) NOT NULL,
+        	       `during_seconds` int(11) NOT NULL,
+        	       PRIMARY KEY (`id`),
+        	       KEY `invitation_id` (`invitation_id`),
+        	       KEY `event_id` (`event_id`)
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+        	   $db->query("CREATE TABLE `lh_abstract_proactive_chat_variables` (
+        	       `id` int(11) NOT NULL AUTO_INCREMENT,
+        	       `name` varchar(50) NOT NULL,
+        	       `identifier` varchar(50) NOT NULL,
+        	       `store_timeout` int(11) NOT NULL,
+        	       `filter_val` int(11) NOT NULL DEFAULT '0',
+        	       PRIMARY KEY (`id`),
+        	       KEY `identifier` (`identifier`)
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_users_setting` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
         	   `user_id` int(11) NOT NULL,
         	   `identifier` varchar(50) NOT NULL,
-        	   `value` varchar(255) NOT NULL,
+        	   `value` text NOT NULL,
         	   PRIMARY KEY (`id`),
         	   KEY `user_id` (`user_id`,`identifier`)
-        	   ) DEFAULT CHARSET=utf8;");
-
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_departament_limit_group_member` (  
+    	       `id` int(11) NOT NULL AUTO_INCREMENT,  
+    	       `dep_id` int(11) NOT NULL,  
+    	       `dep_limit_group_id` int(11) NOT NULL,  
+    	       PRIMARY KEY (`id`),  
+    	       KEY `dep_limit_group_id` (`dep_limit_group_id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_departament_limit_group` (  
+    	       `id` int(11) NOT NULL AUTO_INCREMENT,  
+    	       `name` varchar(50) NOT NULL,
+    	       `pending_max` int(11) NOT NULL,  
+    	       PRIMARY KEY (`id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
+        	   $db->query("CREATE TABLE `lh_abstract_auto_responder_chat` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `chat_id` int(11) NOT NULL,
+                  `auto_responder_id` int(11) NOT NULL,
+                  `wait_timeout_send` int(11) NOT NULL,
+                  `pending_send_status` int(11) NOT NULL,
+                  `active_send_status` int(11) NOT NULL,
+                  PRIMARY KEY (`id`),
+                  KEY `chat_id` (`chat_id`)
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+       	          
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_users_setting_option` (
 				  `identifier` varchar(50) NOT NULL,
 				  `class` varchar(50) NOT NULL,
 				  `attribute` varchar(40) NOT NULL,
 				  PRIMARY KEY (`identifier`)
-				) DEFAULT CHARSET=utf8;");        	   
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   $db->query("INSERT INTO `lh_users_setting_option` (`identifier`, `class`, `attribute`) VALUES
         	   ('chat_message',	'',	''),
@@ -965,7 +1102,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `explain` varchar(250) NOT NULL,
                   `hidden` int(11) NOT NULL DEFAULT '0',
                   PRIMARY KEY (`identifier`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $randomHash = erLhcoreClassModelForgotPassword::randomPassword(9);
         	   $randomHashLength = strlen($randomHash);
@@ -985,6 +1122,10 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   	('pro_active_invite',	'1',	0,	'Is pro active chat invitation active. Online users tracking also has to be enabled',	0),
                 ('customer_company_name',	'Live Helper Chat',	0,	'Your company name - visible in bottom left corner',	0),
                 ('customer_site_url',	'http://livehelperchat.com',	0,	'Your site URL address',	0),
+                ('transfer_configuration','0','0','Transfer configuration','1'),
+                ('tracked_footprint_cleanup','90','0','How many days keep records of users footprint.','0'),
+                ('cleanup_cronjob','0','0','Cleanup should be done only using cronjob.','0'),                
+                ('assign_workflow_timeout','0','0','Chats waiting in pending line more than n seconds should be auto assigned first. Time in seconds','0'),
         	   	('smtp_data',	'a:5:{s:4:\"host\";s:0:\"\";s:4:\"port\";s:2:\"25\";s:8:\"use_smtp\";i:0;s:8:\"username\";s:0:\"\";s:8:\"password\";s:0:\"\";}',	0,	'SMTP configuration',	1),
         	    ('chatbox_data',	'a:6:{i:0;b:0;s:20:\"chatbox_auto_enabled\";i:0;s:19:\"chatbox_secret_hash\";s:{$randomHashLength}:\"{$randomHash}\";s:20:\"chatbox_default_name\";s:7:\"Chatbox\";s:17:\"chatbox_msg_limit\";i:50;s:22:\"chatbox_default_opname\";s:7:\"Manager\";}',	0,	'Chatbox configuration',	1),
                 ('start_chat_data',	'a:23:{i:0;b:0;s:21:\"name_visible_in_popup\";b:1;s:27:\"name_visible_in_page_widget\";b:1;s:19:\"name_require_option\";s:8:\"required\";s:22:\"email_visible_in_popup\";b:0;s:28:\"email_visible_in_page_widget\";b:0;s:20:\"email_require_option\";s:8:\"required\";s:24:\"message_visible_in_popup\";b:1;s:30:\"message_visible_in_page_widget\";b:1;s:22:\"message_require_option\";s:8:\"required\";s:22:\"phone_visible_in_popup\";b:0;s:28:\"phone_visible_in_page_widget\";b:0;s:20:\"phone_require_option\";s:8:\"required\";s:21:\"force_leave_a_message\";b:0;s:29:\"offline_name_visible_in_popup\";b:1;s:35:\"offline_name_visible_in_page_widget\";b:1;s:27:\"offline_name_require_option\";s:8:\"required\";s:30:\"offline_phone_visible_in_popup\";b:0;s:36:\"offline_phone_visible_in_page_widget\";b:0;s:28:\"offline_phone_require_option\";s:8:\"required\";s:32:\"offline_message_visible_in_popup\";b:1;s:38:\"offline_message_visible_in_page_widget\";b:1;s:30:\"offline_message_require_option\";s:8:\"required\";}',	0,	'',	1),
@@ -998,13 +1139,15 @@ switch ((int)$Params['user_parameters']['step_id']) {
                 ('ignorable_ip',	'',	0,	'Which ip should be ignored in online users list, separate by comma',0),
                 ('run_departments_workflow', 0, 0, 'Should cronjob run departments transfer workflow, even if user leaves a chat',	0),
                 ('geo_location_data', 'a:3:{s:4:\"zoom\";i:4;s:3:\"lat\";s:7:\"49.8211\";s:3:\"lng\";s:7:\"11.7835\";}', '0', '', '1'),
-                ('xmp_data','a:14:{i:0;b:0;s:4:\"host\";s:15:\"talk.google.com\";s:6:\"server\";s:9:\"gmail.com\";s:8:\"resource\";s:6:\"xmpphp\";s:4:\"port\";s:4:\"5222\";s:7:\"use_xmp\";i:0;s:8:\"username\";s:0:\"\";s:8:\"password\";s:0:\"\";s:11:\"xmp_message\";s:78:\"New chat request [{chat_id}]\r\n{messages}\r\nClick to accept a chat\r\n{url_accept}\";s:10:\"recipients\";s:0:\"\";s:20:\"xmp_accepted_message\";s:69:\"{user_name} has accepted a chat [{chat_id}]\r\n{messages}\r\n{url_accept}\";s:16:\"use_standard_xmp\";i:0;s:15:\"test_recipients\";s:0:\"\";s:21:\"test_group_recipients\";s:0:\"\";}',0,'XMP data',1),
+                ('xmp_data','a:14:{i:0;b:0;s:4:\"host\";s:15:\"talk.google.com\";s:6:\"server\";s:9:\"gmail.com\";s:8:\"resource\";s:6:\"xmpphp\";s:4:\"port\";s:4:\"5222\";s:7:\"use_xmp\";i:0;s:8:\"username\";s:0:\"\";s:8:\"password\";s:0:\"\";s:11:\"xmp_message\";s:98:\"New chat request [{chat_id}] from [{department}]\r\n{messages}\r\nClick to accept a chat\r\n{url_accept}\";s:10:\"recipients\";s:0:\"\";s:20:\"xmp_accepted_message\";s:89:\"{user_name} has accepted a chat [{chat_id}] from [{department}]\r\n{messages}\r\n{url_accept}\";s:16:\"use_standard_xmp\";i:0;s:15:\"test_recipients\";s:0:\"\";s:21:\"test_group_recipients\";s:0:\"\";}',0,'XMP data',1),
                 ('run_unaswered_chat_workflow', 0, 0, 'Should cronjob run unanswered chats workflow and execute unaswered chats callback, 0 - no, any other number bigger than 0 is a minits how long chat have to be not accepted before executing callback.',0),
                 ('disable_popup_restore', 0, 0, 'Disable option in widget to open new window. Restore icon will be hidden',	0),
                 ('accept_tos_link', '#', 0, 'Change to your site Terms of Service', 0),
                 ('hide_button_dropdown', '0', 0, 'Hide close button in dropdown', 0),
                 ('on_close_exit_chat', '0', 0, 'On chat close exit chat', 0),
+                ('activity_timeout', '5', 0, 'How long operator should go offline automatically because of inactivity. Value in minutes', 0),
                 ('product_enabled_module','0','0','Product module is enabled', '1'),
+                ('product_show_departament','0','0','Enable products show by departments', '1'),
                 ('paidchat_data','','0','Paid chat configuration','1'),
                 ('disable_iframe_sharing',	'1',	0,	'Disable iframes in sharing mode',	0),
                 ('file_configuration',	'a:7:{i:0;b:0;s:5:\"ft_op\";s:43:\"gif|jpe?g|png|zip|rar|xls|doc|docx|xlsx|pdf\";s:5:\"ft_us\";s:26:\"gif|jpe?g|png|doc|docx|pdf\";s:6:\"fs_max\";i:2048;s:18:\"active_user_upload\";b:0;s:16:\"active_op_upload\";b:1;s:19:\"active_admin_upload\";b:1;}',	0,	'Files configuration item',	1),
@@ -1024,6 +1167,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                 ('disable_send','0',0,'Disable chat transcript send', '0'),
                 ('ignore_user_status','0',0,'Ignore users online statuses and use departments online hours', '0'),
                 ('bbc_button_visible','1',0,'Show BB Code button', '0'),
+                ('activity_track_all','0','0','Track all logged operators activity and ignore their individual settings.','0'),
                 ('allow_reopen_closed','1', 0, 'Allow user to reopen closed chats?', '0'),
                 ('reopen_as_new','1', 0, 'Reopen closed chat as new? Otherwise it will be reopened as active.', '0'),
                 ('default_theme_id','0', 0, 'Default theme ID.', '1'),  
@@ -1038,7 +1182,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                 ('min_phone_length','8',0,'Minimum phone number length',0),
                 ('mheight','',0,'Messages box height',0),
                 ('inform_unread_message','0',0,'Inform visitor about unread messages from operator, value in minutes. 0 - disabled',0),
-                ('dashboard_order', 'online_operators,departments_stats|pending_chats,unread_chats,transfered_chats|active_chats,closed_chats', '0', 'Home page dashboard widgets order', '0'),
+                ('dashboard_order', '[[\"online_operators\",\"departments_stats\",\"online_visitors\"],[\"pending_chats\",\"unread_chats\",\"transfered_chats\"],[\"active_chats\",\"closed_chats\"]]', '0', 'Home page dashboard widgets order', '0'),
                 ('banned_ip_range','',0,'Which ip should not be allowed to chat',0),
                 ('suggest_leave_msg','1',0,'Suggest user to leave a message then user chooses offline department',0),
                 ('checkstatus_timeout','0',0,'Interval between chat status checks in seconds, 0 disabled.',0),
@@ -1081,7 +1225,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   	  `tt_pages_count` int(11) NOT NULL,
         	   	  `invitation_count` int(11) NOT NULL,
         	   	  `last_check_time` int(11) NOT NULL,
-        	   	  `dep_id` int(11) NOT NULL,
+        	   	  `dep_id` int(11) NOT NULL,        	   	 
                   `user_agent` varchar(250) NOT NULL,
                   `notes` varchar(250) NOT NULL,
                   `user_country_code` varchar(50) NOT NULL,
@@ -1112,7 +1256,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   KEY `vid` (`vid`),
 				  KEY `dep_id` (`dep_id`),
 				  KEY `last_visit_dep_id` (`last_visit`,`dep_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_proactive_chat_invitation` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -1124,30 +1268,34 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `executed_times` int(11) NOT NULL,
 				  `dep_id` int(11) NOT NULL,
 				  `hide_after_ntimes` int(11) NOT NULL,
+				  `show_on_mobile` int(11) NOT NULL,
+				  `delay` int(11) NOT NULL,
+				  `delay_init` int(11) NOT NULL,
+				  `show_instant` int(11) NOT NULL,
+				  `autoresponder_id` int(11) NOT NULL,
 				  `name` varchar(50) NOT NULL,
-				  `operator_ids` varchar(100) NOT NULL,
-				  `wait_message` varchar(250) NOT NULL,
-				  `timeout_message` varchar(250) NOT NULL,
+				  `operator_ids` varchar(100) NOT NULL,				 
 				  `message_returning_nick` varchar(250) NOT NULL,
-				  `referrer` varchar(250) NOT NULL,
-				  `wait_timeout` int(11) NOT NULL,
+				  `referrer` varchar(250) NOT NULL,				  
 				  `show_random_operator` int(11) NOT NULL,
 				  `operator_name` varchar(100) NOT NULL,
 				  `position` int(11) NOT NULL,
+				  `event_invitation` int(11) NOT NULL,
+				  `dynamic_invitation` int(11) NOT NULL,
         	   	  `identifier` varchar(50) NOT NULL,
         	   	  `tag` varchar(50) NOT NULL,
         	   	  `requires_email` int(11) NOT NULL,
+        	   	  `iddle_for` int(11) NOT NULL,
+        	   	  `event_type` int(11) NOT NULL,
         	   	  `requires_username` int(11) NOT NULL,
-        	   	  `requires_phone` int(11) NOT NULL,
-        	   	  `repeat_number` int(11) NOT NULL DEFAULT '1',
+        	   	  `requires_phone` int(11) NOT NULL,        	   	  
 				  PRIMARY KEY (`id`),
 				  KEY `time_on_site_pageviews_siteaccess_position` (`time_on_site`,`pageviews`,`siteaccess`,`identifier`,`position`),
         	      KEY `identifier` (`identifier`),
+        	      KEY `dynamic_invitation` (`dynamic_invitation`),
         	      KEY `tag` (`tag`),
         	      KEY `dep_id` (`dep_id`)
-				) DEFAULT CHARSET=utf8;");
-        	   
-        	
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_chat_accept` (
         	   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -1157,7 +1305,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
         	   `wused` int(11) NOT NULL,
         	   PRIMARY KEY (`id`),
         	   KEY `hash` (`hash`)
-        	   ) DEFAULT CHARSET=utf8;");
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
         	   
         	   //Default departament
         	   $db->query("CREATE TABLE IF NOT EXISTS `lh_departament` (
@@ -1170,6 +1318,9 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `sort_priority` int(11) NOT NULL,
 				  `department_transfer_id` int(11) NOT NULL,
 				  `transfer_timeout` int(11) NOT NULL,
+				  `exclude_inactive_chats` int(11) NOT NULL,
+				  `delay_before_assign` int(11) NOT NULL,
+				  `max_ac_dep_chats` int(11) NOT NULL,
 				  `disabled` int(11) NOT NULL,
 				  `hidden` int(11) NOT NULL,
 				  `delay_lm` int(11) NOT NULL,
@@ -1203,14 +1354,22 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `attr_int_1` int(11) NOT NULL,
 				  `attr_int_2` int(11) NOT NULL,
 				  `attr_int_3` int(11) NOT NULL,
+				  `pending_max` int(11) NOT NULL,
+				  `pending_group_max` int(11) NOT NULL,
 				  `active_chats_counter` int(11) NOT NULL,
 				  `pending_chats_counter` int(11) NOT NULL,
 				  `closed_chats_counter` int(11) NOT NULL,
+				  `inform_close_all` int(11) NOT NULL,
+				  `inform_close_all_email` varchar(250) NOT NULL,
+				  `product_configuration` varchar(250) NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `identifier` (`identifier`),
 				  KEY `attr_int_1` (`attr_int_1`),
 				  KEY `attr_int_2` (`attr_int_2`),
 				  KEY `attr_int_3` (`attr_int_3`),
+				  KEY `active_chats_counter` (`active_chats_counter`),
+				  KEY `pending_chats_counter` (`pending_chats_counter`),
+				  KEY `closed_chats_counter` (`closed_chats_counter`),
 				  KEY `disabled_hidden` (`disabled`, `hidden`),
 				  KEY `sort_priority_name` (`sort_priority`, `name`),
 				  KEY `active_mod` (`online_hours_active`,`mod_start_hour`,`mod_end_hour`),
@@ -1220,7 +1379,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  KEY `active_frd` (`online_hours_active`,`frd_start_hour`,`frd_end_hour`),
 				  KEY `active_sad` (`online_hours_active`,`sad_start_hour`,`sad_end_hour`),
 				  KEY `active_sud` (`online_hours_active`,`sud_start_hour`,`sud_end_hour`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE `lh_departament_group_user` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -1229,22 +1388,33 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   PRIMARY KEY (`id`),
                   KEY `dep_group_id` (`dep_group_id`),
                   KEY `user_id` (`user_id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	           	   
+        	   $db->query("CREATE TABLE `lh_abstract_product_departament` (
+        	       `id` int(11) NOT NULL AUTO_INCREMENT,
+        	       `product_id` int(11) NOT NULL,
+        	       `departament_id` int(11) NOT NULL,
+        	       PRIMARY KEY (`id`),
+        	       KEY `departament_id` (`departament_id`)
+        	   ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   
         	   $db->query("CREATE TABLE `lh_departament_group_member` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
                   `dep_id` int(11) NOT NULL,
                   `dep_group_id` int(11) NOT NULL,
                   PRIMARY KEY (`id`),
                   KEY `dep_group_id` (`dep_group_id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
         	   $db->query("CREATE TABLE `lh_departament_group` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
                   `name` varchar(50) NOT NULL,
                   PRIMARY KEY (`id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-        	   
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+        	   $db->query("CREATE TABLE `lh_canned_msg_tag_link` (  `id` int(11) NOT NULL AUTO_INCREMENT,  `tag_id` int(11) NOT NULL,  `canned_id` int(11) NOT NULL,  PRIMARY KEY (`id`), KEY `canned_id` (`canned_id`), KEY `tag_id` (`tag_id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        	   $db->query("CREATE TABLE `lh_canned_msg_tag` (  `id` int(11) NOT NULL AUTO_INCREMENT,  `tag` varchar(40) NOT NULL, PRIMARY KEY (`id`), KEY `tag` (`tag`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
         	   $Departament = new erLhcoreClassModelDepartament();
                $Departament->name = $form->DefaultDepartament;
                erLhcoreClassDepartament::getSession()->save($Departament);
@@ -1261,7 +1431,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  KEY `dep_id` (`dep_id`),
 				  KEY `date_from` (`date_from`),
 				  KEY `search_active` (`date_from`, `date_to`, `dep_id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                //Administrators group
                $db->query("CREATE TABLE IF NOT EXISTS `lh_group` (
@@ -1270,7 +1440,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                `disabled` int(11) NOT NULL,
                PRIMARY KEY (`id`),
                KEY `disabled` (`disabled`)
-               ) DEFAULT CHARSET=utf8;");                             
+               ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
                
                // Admin group
                $GroupData = new erLhcoreClassModelGroup();
@@ -1287,7 +1457,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `id` int(11) NOT NULL AUTO_INCREMENT,
                   `name` varchar(50) NOT NULL,
                   PRIMARY KEY (`id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                // Administrators role
                $Role = new erLhcoreClassModelRole();
@@ -1307,7 +1477,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   PRIMARY KEY (`id`),
                   KEY `group_id` (`role_id`,`group_id`),
                   KEY `group_id_primary` (`group_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                // Assign admin role to admin group
                $GroupRole = new erLhcoreClassModelGroupRole();
@@ -1339,14 +1509,18 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `session_id` varchar(40) NOT NULL,
                   `operation_admin` text NOT NULL,
                   `skype` varchar(50) NOT NULL,
+                  `exclude_autoasign` tinyint(1) NOT NULL,
                   `disabled` tinyint(4) NOT NULL,
                   `hide_online` tinyint(1) NOT NULL,
                   `all_departments` tinyint(1) NOT NULL,
                   `invisible_mode` tinyint(1) NOT NULL,
+                  `inactive_mode` tinyint(1) NOT NULL,
                   `rec_per_req` tinyint(1) NOT NULL,
                   `active_chats_counter` int(11) NOT NULL,
                   `closed_chats_counter` int(11) NOT NULL,
                   `pending_chats_counter` int(11) NOT NULL,
+                  `auto_accept` tinyint(1) NOT NULL,
+                  `max_active_chats` int(11) NOT NULL,
                   `attr_int_1` int(11) NOT NULL,
                   `attr_int_2` int(11) NOT NULL,
                   `attr_int_3` int(11) NOT NULL,
@@ -1355,7 +1529,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   KEY `rec_per_req` (`rec_per_req`),
                   KEY `email` (`email`),
                   KEY `xmpp_username` (`xmpp_username`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 $UserData = new erLhcoreClassModelUser();
 
@@ -1375,22 +1549,28 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `user_id` int(11) NOT NULL,
                   `dep_id` int(11) NOT NULL,
                   `last_activity` int(11) NOT NULL,
+                  `exclude_autoasign` tinyint(1) NOT NULL DEFAULT '0',
                   `hide_online` int(11) NOT NULL,
                   `last_accepted` int(11) NOT NULL,
                   `active_chats` int(11) NOT NULL,
+                  `pending_chats` int(11) NOT NULL DEFAULT '0',
+                  `inactive_chats` int(11) NOT NULL DEFAULT '0',
+                  `max_chats` int(11) NOT NULL DEFAULT '0',
                   `type` int(11) NOT NULL DEFAULT '0',
+                  `ro` tinyint(1) NOT NULL DEFAULT '0',
+                  `hide_online_ts` int(11) NOT NULL DEFAULT '0',
                   `dep_group_id` int(11) NOT NULL DEFAULT '0',
                   PRIMARY KEY (`id`),
                   KEY `last_activity_hide_online_dep_id` (`last_activity`,`hide_online`,`dep_id`),
                   KEY `dep_id` (`dep_id`),
                   KEY `user_id_type` (`user_id`,`type`)
-                ) DEFAULT CHARSET=utf8");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
                 // Insert record to departament instantly
-                $db->query("INSERT INTO `lh_userdep` (`user_id`,`dep_id`,`last_activity`,`hide_online`,`last_accepted`,`active_chats`,`type`,`dep_group_id`) VALUES ({$UserData->id},0,0,0,0,0,0,0)");
+                $db->query("INSERT INTO `lh_userdep` (`user_id`,`dep_id`,`last_activity`,`hide_online`,`last_accepted`,`active_chats`,`type`,`dep_group_id`,`exclude_autoasign`) VALUES ({$UserData->id},0,0,0,0,0,0,0,0)");
 
-                
-                
+                $db->query("CREATE TABLE `lh_group_work` (  `id` int(11) NOT NULL AUTO_INCREMENT,  `group_id` int(11) NOT NULL, `group_work_id` int(11) NOT NULL, PRIMARY KEY (`id`), KEY `group_id` (`group_id`)) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
                 // Transfer chat
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_transfer` (
 				  `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -1398,12 +1578,13 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `dep_id` int(11) NOT NULL,
 				  `transfer_user_id` int(11) NOT NULL,
 				  `from_dep_id` int(11) NOT NULL,
+				  `ctime` int(11) NOT NULL,
 				  `transfer_to_user_id` int(11) NOT NULL,
 				  PRIMARY KEY (`id`),
 				  KEY `dep_id` (`dep_id`),
 				  KEY `transfer_user_id_dep_id` (`transfer_user_id`,`dep_id`),
 				  KEY `transfer_to_user_id` (`transfer_to_user_id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // Remember user table
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_users_remember` (
@@ -1411,7 +1592,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				 `user_id` int(11) NOT NULL,
 				 `mtime` int(11) NOT NULL,
 				 PRIMARY KEY (`id`)
-				) DEFAULT CHARSET=utf8;");
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
                 
                 // API table
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_abstract_rest_api_key` (
@@ -1422,7 +1603,22 @@ switch ((int)$Params['user_parameters']['step_id']) {
                     PRIMARY KEY (`id`),
                     KEY `api_key` (`api_key`),
                     KEY `user_id` (`user_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+                
+                // Session
+                $db->query("CREATE TABLE `lh_users_session` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `token` varchar(40) NOT NULL,
+                  `device_type` int(11) NOT NULL,
+                  `device_token` varchar(255) NOT NULL,
+                  `user_id` int(11) NOT NULL,
+                  `created_on` int(11) NOT NULL,
+                  `updated_on` int(11) NOT NULL,
+                  `expires_on` int(11) NOT NULL,
+                  PRIMARY KEY (`id`),
+                  KEY `device_token_device_type_v2` (`device_token`(191),`device_type`),
+                  KEY `token` (`token`)
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // Chat messages
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_msg` (
@@ -1433,8 +1629,9 @@ switch ((int)$Params['user_parameters']['step_id']) {
 				  `user_id` int(11) NOT NULL DEFAULT '0',
 				  `name_support` varchar(100) NOT NULL,
 				  PRIMARY KEY (`id`),
-				  KEY `chat_id_id` (`chat_id`, `id`)
-				) DEFAULT CHARSET=utf8;");
+				  KEY `chat_id_id` (`chat_id`, `id`),
+				  KEY `user_id` (`user_id`)
+				) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // Forgot password table
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_forgotpasswordhash` (
@@ -1442,7 +1639,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                 `user_id` INT NOT NULL ,
                 `hash` VARCHAR( 40 ) NOT NULL ,
                 `created` INT NOT NULL
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // User groups table
                 $db->query("CREATE TABLE IF NOT EXISTS `lh_groupuser` (
@@ -1453,7 +1650,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   KEY `group_id` (`group_id`),
                   KEY `user_id` (`user_id`),
                   KEY `group_id_2` (`group_id`,`user_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // Assign admin user to admin group
                 $GroupUser = new erLhcoreClassModelGroupUser();
@@ -1467,9 +1664,10 @@ switch ((int)$Params['user_parameters']['step_id']) {
                   `role_id` int(11) NOT NULL,
                   `module` varchar(100) NOT NULL,
                   `function` varchar(100) NOT NULL,
+                  `limitation` text NOT NULL,
                   PRIMARY KEY (`id`),
                   KEY `role_id` (`role_id`)
-                ) DEFAULT CHARSET=utf8;");
+                ) ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
                 // Admin role and function
                 $RoleFunction = new erLhcoreClassModelRoleFunction();
@@ -1502,6 +1700,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                     array('module' => 'lhsystem','function' => 'changelanguage'),
                     array('module' => 'lhchat',  'function' => 'allowredirect'),
                     array('module' => 'lhchat',  'function' => 'allowtransfer'),
+                    array('module' => 'lhchat',  'function' => 'allowtransferdirectly'),
                     array('module' => 'lhchat',  'function' => 'administratecannedmsg'),
                     array('module' => 'lhchat',  'function' => 'sees_all_online_visitors'),
                     array('module' => 'lhpermission',   'function' => 'see_permissions'),
@@ -1516,6 +1715,7 @@ switch ((int)$Params['user_parameters']['step_id']) {
                     array('module' => 'lhstatistic',   	'function' => 'use'),
                     array('module' => 'lhspeech', 'function' => 'changedefaultlanguage'),
                     array('module' => 'lhspeech', 'function' => 'use'),
+                    array('module' => 'lhcannedmsg', 'function' => 'use'),
                     array('module' => 'lhspeech', 'function' => 'change_chat_recognition'),
                 );
                 

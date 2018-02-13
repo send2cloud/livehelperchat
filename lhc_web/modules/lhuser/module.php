@@ -6,12 +6,17 @@ $ViewList = array();
 
 $ViewList['login'] = array(
     'params' => array(),
-    'uparams' => array('r','external_request'),
+    'uparams' => array('r','external_request','noaccess'),
 );
 
 $ViewList['autologin'] = array(
     'params' => array('hash'),
     'uparams' => array('r','u','l','t'),
+);
+
+$ViewList['autologinuser'] = array(
+    'params' => array('hash'),
+    'uparams' => array(),
 );
 
 $ViewList['logout'] = array(
@@ -51,6 +56,12 @@ $ViewList['new'] = array(
     'params' => array(),
     'uparams' => array('tab'),
     'functions' => array( 'createuser' )
+);
+
+$ViewList['import'] = array(
+    'params' => array(),
+    'uparams' => array(),
+    'functions' => array( 'import' )
 );
 
 $ViewList['newgroup'] = array(
@@ -105,6 +116,16 @@ $ViewList['setinvisible'] = array (
 		'params' => array('status')
 );
 
+$ViewList['setinactive'] = array (
+		'functions' => array( 'selfedit' ),
+		'params' => array('status')
+);
+
+$ViewList['wentinactive'] = array (
+		'functions' => array( 'selfedit' ),
+		'params' => array()
+);
+
 $ViewList['autologinconfig'] = array(
     'params' => array(),
     'uparams' => array('csfr'),
@@ -118,6 +139,7 @@ $FunctionList['deletegroup'] = array('explain' => 'Allow user to delete group');
 $FunctionList['createuser'] = array('explain' => 'Allow user to create another user');
 $FunctionList['deleteuser'] = array('explain' => 'Allow user to delete another user');
 $FunctionList['edituser'] = array('explain' => 'Allow user to edit another user');
+$FunctionList['editusergroupall'] = array('explain' => 'Allow user to edit another user groups even he is not a member of it.');
 $FunctionList['grouplist'] = array('explain' => 'Allow user to list group');
 $FunctionList['userlist'] = array('explain' => 'Allow user to list users');
 $FunctionList['selfedit'] = array('explain' => 'Allow user to edit his own data');
@@ -135,5 +157,6 @@ $FunctionList['receivepermissionrequest'] = array('explain' => 'Allow user to ch
 $FunctionList['userautologin'] = array('explain' => 'Allow user to configure autologin');
 $FunctionList['canseedepartmentstats'] = array('explain' => 'Allow user to see departments statistic');
 $FunctionList['canseealldepartmentstats'] = array('explain' => 'Allow user to see all departments statistic, not only from his departments');
+$FunctionList['import'] = array('explain' => 'Allow user to import users');
 
 ?>

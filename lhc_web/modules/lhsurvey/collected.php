@@ -32,6 +32,21 @@ if ($Params['user_parameters_unordered']['xls'] == 1) {
 	exit;
 }
 
+if ($Params['user_parameters_unordered']['xlslist'] == 1) {
+    erLhcoreClassSurveyExporter::exportXLSList(erLhAbstractModelSurveyItem::getList(array_merge($filterSearch,array('offset' => 0, 'limit' => 100000))),$survey);
+	exit;
+}
+
+if ($Params['user_parameters_unordered']['json'] == 1) {
+    erLhcoreClassSurveyExporter::exportJSON(erLhAbstractModelSurveyItem::getList(array_merge($filterSearch,array('offset' => 0, 'limit' => 100000))),$survey);
+	exit;
+}
+
+if ($Params['user_parameters_unordered']['xml'] == 1) {
+    erLhcoreClassSurveyExporter::exportJSON(erLhAbstractModelSurveyItem::getList(array_merge($filterSearch,array('offset' => 0, 'limit' => 100000))),$survey,'xml');
+	exit;
+}
+
 if ($Params['user_parameters_unordered']['print'] == 1) {
     $tpl = erLhcoreClassTemplate::getInstance('lhsurvey/printsurvey.tpl.php');
     $items = erLhAbstractModelSurveyItem::getList(array_merge($filterSearch,array('offset' => 0, 'limit' => 100000)));        
@@ -43,12 +58,12 @@ if ($Params['user_parameters_unordered']['print'] == 1) {
 }
 
 $pages = new lhPaginator();
-$pages->serverURL = erLhcoreClassDesign::baseurl('survey/collected').'/'.$survey->id . $append;
+$pages->serverURL = erLhcoreClassDesign::baseurl('survey/collected') . '/' . $survey->id . $append;
 
 if ($filterParams['input_form']->group_results == true) {
    $filtercount = $filterSearch;
    unset($filtercount['group']);
-   $pages->items_total = erLhAbstractModelSurveyItem::getCount($filterSearch,'count(distinct user_id)');
+   $pages->items_total = erLhAbstractModelSurveyItem::getCount($filterSearch,false, false, 'count(distinct user_id)');
 } else {
    $pages->items_total = erLhAbstractModelSurveyItem::getCount($filterSearch);
 }
@@ -61,10 +76,11 @@ if ($pages->items_total > 0) {
 	$items = erLhAbstractModelSurveyItem::getList(array_merge($filterSearch,array('offset' => $pages->low, 'limit' => $pages->items_per_page)));
 }
 
-
 $tpl->set('items',$items);
 $tpl->set('pages',$pages);
 $tpl->set('survey',$survey);
+$tpl->set('tab','');
+$tpl->set('survey_filter',$filterSearch);
 
 $filterParams['input_form']->form_action = erLhcoreClassDesign::baseurl('survey/collected') . '/' . $survey->id;
 
@@ -72,6 +88,7 @@ $tpl->set('input',$filterParams['input_form']);
 $tpl->set('inputAppend',$append);
 
 $Result['content'] = $tpl->fetch();
+$Result['additional_header_js'] = '<script type="text/javascript" src="'.erLhcoreClassDesign::design('js/Chart.bundle.min.js').'"></script>';
 
 $object_trans = $survey->getModuleTranslations();
 

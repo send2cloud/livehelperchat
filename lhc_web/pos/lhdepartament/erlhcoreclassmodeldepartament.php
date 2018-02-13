@@ -156,6 +156,21 @@ $def->properties['max_active_chats']->columnName   = 'max_active_chats';
 $def->properties['max_active_chats']->propertyName = 'max_active_chats';
 $def->properties['max_active_chats']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
+$def->properties['max_ac_dep_chats'] = new ezcPersistentObjectProperty();
+$def->properties['max_ac_dep_chats']->columnName   = 'max_ac_dep_chats';
+$def->properties['max_ac_dep_chats']->propertyName = 'max_ac_dep_chats';
+$def->properties['max_ac_dep_chats']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['exclude_inactive_chats'] = new ezcPersistentObjectProperty();
+$def->properties['exclude_inactive_chats']->columnName   = 'exclude_inactive_chats';
+$def->properties['exclude_inactive_chats']->propertyName = 'exclude_inactive_chats';
+$def->properties['exclude_inactive_chats']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['delay_before_assign'] = new ezcPersistentObjectProperty();
+$def->properties['delay_before_assign']->columnName   = 'delay_before_assign';
+$def->properties['delay_before_assign']->propertyName = 'delay_before_assign';
+$def->properties['delay_before_assign']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
 $def->properties['max_timeout_seconds'] = new ezcPersistentObjectProperty();
 $def->properties['max_timeout_seconds']->columnName   = 'max_timeout_seconds';
 $def->properties['max_timeout_seconds']->propertyName = 'max_timeout_seconds';
@@ -180,6 +195,32 @@ $def->properties['sort_priority'] = new ezcPersistentObjectProperty();
 $def->properties['sort_priority']->columnName   = 'sort_priority';
 $def->properties['sort_priority']->propertyName = 'sort_priority';
 $def->properties['sort_priority']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['inform_close_all'] = new ezcPersistentObjectProperty();
+$def->properties['inform_close_all']->columnName   = 'inform_close_all';
+$def->properties['inform_close_all']->propertyName = 'inform_close_all';
+$def->properties['inform_close_all']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// Maximum of pending chats
+$def->properties['pending_max'] = new ezcPersistentObjectProperty();
+$def->properties['pending_max']->columnName   = 'pending_max';
+$def->properties['pending_max']->propertyName = 'pending_max';
+$def->properties['pending_max']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['pending_group_max'] = new ezcPersistentObjectProperty();
+$def->properties['pending_group_max']->columnName   = 'pending_group_max';
+$def->properties['pending_group_max']->propertyName = 'pending_group_max';
+$def->properties['pending_group_max']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['inform_close_all_email'] = new ezcPersistentObjectProperty();
+$def->properties['inform_close_all_email']->columnName   = 'inform_close_all_email';
+$def->properties['inform_close_all_email']->propertyName = 'inform_close_all_email';
+$def->properties['inform_close_all_email']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
+
+$def->properties['product_configuration'] = new ezcPersistentObjectProperty();
+$def->properties['product_configuration']->columnName   = 'product_configuration';
+$def->properties['product_configuration']->propertyName = 'product_configuration';
+$def->properties['product_configuration']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
 
 return $def;
 

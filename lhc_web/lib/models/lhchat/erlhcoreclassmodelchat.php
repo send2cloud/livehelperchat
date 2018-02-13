@@ -2,6 +2,16 @@
 
 class erLhcoreClassModelChat {
 
+   use erLhcoreClassDBTrait;
+    
+   public static $dbTable = 'lh_chat';
+    
+   public static $dbTableId = 'id';
+   
+   public static $dbSessionHandler = 'erLhcoreClassChat::getSession';
+    
+   public static $dbSortOrder = 'DESC';
+    
    public function getState()
    {
        return array(
@@ -9,6 +19,9 @@ class erLhcoreClassModelChat {
                'nick'            		=> $this->nick,
                'status'          		=> $this->status,
                'status_sub'          	=> $this->status_sub,
+               'status_sub_arg'         => $this->status_sub_arg,
+               'status_sub_sub'         => $this->status_sub_sub,
+               'sender_user_id'         => $this->sender_user_id,
                'time'            		=> $this->time,
                'user_id'         		=> $this->user_id,
                'hash'            		=> $this->hash,
@@ -43,22 +56,21 @@ class erLhcoreClassModelChat {
                'chat_initiator'     	=> $this->chat_initiator,
                'user_tz_identifier'     => $this->user_tz_identifier,
                'user_closed_ts'     	=> $this->user_closed_ts,
+               'lsync'     	            => $this->lsync,
 
        		   'online_user_id'     	=> $this->online_user_id,
        		   'unread_messages_informed' => $this->unread_messages_informed,
        		   'unread_op_messages_informed' => $this->unread_op_messages_informed,
        		   'reinform_timeout'     	=> $this->reinform_timeout,
 
-       		   // Wait timeout attribute
-               'wait_timeout'     		=> $this->wait_timeout,
-               'wait_timeout_repeat'    => $this->wait_timeout_repeat,
-               'wait_timeout_send'     	=> $this->wait_timeout_send,
-               'timeout_message'     	=> $this->timeout_message,
-
+               // Auto responder
+               'auto_responder_id'      => $this->auto_responder_id,
+           
        		    // Transfer workflow attributes
                'transfer_timeout_ts'    => $this->transfer_timeout_ts,
                'transfer_if_na'    		=> $this->transfer_if_na,
                'transfer_timeout_ac'    => $this->transfer_timeout_ac,
+               'transfer_uid'           => $this->transfer_uid,
 
        			// Callback status
                'na_cb_executed'    		=> $this->na_cb_executed,
@@ -78,6 +90,9 @@ class erLhcoreClassModelChat {
        		
                'tslasign'    			=> $this->tslasign,
            
+               // Operator status while he was accepting chat
+               'usaccept'    			=> $this->usaccept,
+           
                // Visitor language
                'chat_locale'    		=> $this->chat_locale,
            
@@ -90,80 +105,63 @@ class erLhcoreClassModelChat {
            
                // Product ID
                'product_id'    	        => $this->product_id,
+       		
+               'uagent'    	        	=> $this->uagent,
+               'device_type'    	    => $this->device_type,
        );
    }
 
-   public function setState( array $properties )
+   public function beforeRemove()
    {
-       foreach ( $properties as $key => $val )
-       {
-           $this->$key = $val;
+       $q = ezcDbInstance::get()->createDeleteQuery();
+       
+       // Messages
+       $q->deleteFrom( 'lh_msg' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+       
+       // Transfered chats
+       $q->deleteFrom( 'lh_transfer' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+       
+       // Delete user footprint
+       $q->deleteFrom( 'lh_chat_online_user_footprint' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+        
+       // Delete screen sharing
+       $q->deleteFrom( 'lh_cobrowse' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+        
+       // Delete speech settings
+       $q->deleteFrom( 'lh_speech_chat_language' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+        
+       // Survey
+       $q->deleteFrom( 'lh_abstract_survey_item' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+        
+       // Paid chats
+       $q->deleteFrom( 'lh_chat_paid' )->where( $q->expr->eq( 'chat_id', $this->id ) );
+       $stmt = $q->prepare();
+       $stmt->execute();
+       
+       erLhcoreClassModelChatFile::deleteByChatId($this->id);
+   }
+
+   public function afterRemove()
+   {
+       erLhcoreClassChat::updateActiveChats($this->user_id);
+        
+       if ($this->department !== false) {
+           erLhcoreClassChat::updateDepartmentStats($this->department);
        }
    }
-
-   public function removeThis()
-   {
-	   	$q = ezcDbInstance::get()->createDeleteQuery();
-
-	   	// Messages
-	   	$q->deleteFrom( 'lh_msg' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-
-	   	// Transfered chats
-	   	$q->deleteFrom( 'lh_transfer' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-
-	   	// Delete user footprint
-	   	$q->deleteFrom( 'lh_chat_online_user_footprint' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-	   	
-	   	// Delete screen sharing
-	   	$q->deleteFrom( 'lh_cobrowse' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-	   	
-	   	// Delete speech settings
-	   	$q->deleteFrom( 'lh_speech_chat_language' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-	   	
-	   	// Survey
-	   	$q->deleteFrom( 'lh_abstract_survey_item' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-	   	
-	   	// Paid chats
-	   	$q->deleteFrom( 'lh_chat_paid' )->where( $q->expr->eq( 'chat_id', $this->id ) );
-	   	$stmt = $q->prepare();
-	   	$stmt->execute();
-
-	   	erLhcoreClassModelChatFile::deleteByChatId($this->id);
-
-	   	erLhcoreClassChat::getSession()->delete($this);
-	   	
-	   	erLhcoreClassChat::updateActiveChats($this->user_id);
-	   	
-	   	if ($this->department !== false) {
-	   	    erLhcoreClassChat::updateDepartmentStats($this->department);
-	   	}
-   }
-
-   public static function fetch($chat_id) {
-       	 $chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', (int)$chat_id );
-       	 return $chat;
-   }
-
-   public function saveThis() {
-       	 erLhcoreClassChat::getSession()->saveOrUpdate($this);
-   }
-
-   public function updateThis() {
-       	 erLhcoreClassChat::getSession()->update($this,$this->updateIgnoreColumns);
-   }
-
+   
    public function setIP()
    {
        $this->ip = erLhcoreClassIPDetect::getIP();
@@ -198,6 +196,11 @@ class erLhcoreClassModelChat {
        		   return $this->is_operator_typing;
        		break;
 
+       	case 'can_edit_chat':
+       		   $this->can_edit_chat = erLhcoreClassChat::hasAccessToWrite($this); // typing is considered if status did not changed for 30 seconds
+       		   return $this->can_edit_chat;
+       		break;
+
        	case 'is_user_typing':
        		   $this->is_user_typing = $this->user_typing > (time()-10); // typing is considered if status did not changed for 30 seconds
        		   return $this->is_user_typing;
@@ -218,7 +221,13 @@ class erLhcoreClassModelChat {
        		break;
 
        	case 'chat_duration_front':
-       		   $this->chat_duration_front = erLhcoreClassChat::formatSeconds($this->chat_duration);
+       	       if ($this->chat_duration > 0) {
+                   $this->chat_duration_front = erLhcoreClassChat::formatSeconds($this->chat_duration);
+               } elseif ($this->status != self::STATUS_CLOSED_CHAT) {
+                   $this->chat_duration_front = erLhcoreClassChat::formatSeconds(time() - $this->time);
+               } else {
+                   $this->chat_duration_front = null;
+               }
        		   return $this->chat_duration_front;
        		break;
 
@@ -232,6 +241,7 @@ class erLhcoreClassModelChat {
        	        if ($this->user !== false) {
        	            $this->plain_user_name = (string)$this->user->name_support;
        	        }
+       	        
        			return $this->plain_user_name;
        		break;	
        		
@@ -283,6 +293,18 @@ class erLhcoreClassModelChat {
 
        			return $this->department;
        		break;
+       		
+       	case 'auto_responder':
+           	    $this->auto_responder = false;
+           	    if ($this->auto_responder_id > 0) {
+           	        try {
+           	            $this->auto_responder = erLhAbstractModelAutoResponderChat::fetch($this->auto_responder_id);
+           	        } catch (Exception $e) {
+           	    
+           	        }
+           	    }
+           	    return $this->auto_responder;
+       	    break;
 
        	case 'product':
        			$this->product = false;
@@ -364,22 +386,38 @@ class erLhcoreClassModelChat {
            			if ($jsonData !== null) {
            				$this->chat_variables_array = $jsonData;
            			} else {
-           				$this->chat_variables_array = $this->chat_variables;
+           			    $chat_variables_array = @unserialize($this->chat_variables);
+           			    if ($chat_variables_array !== false) {
+           			        $this->chat_variables_array = $chat_variables_array;
+           			    } else {
+           			        $this->chat_variables_array = $this->chat_variables;
+           			    }
            			}
        	        } else {
-       	            $this->chat_variables_array = $this->chat_variables;
+       	            $this->chat_variables_array = array();
        	        }
        			return $this->chat_variables_array;
        		break;
        		
-       	case 'user_status_front':		
-       	    
-       		if ($this->online_user !== false) {
+       	case 'user_status_front':
+
+       	    if ($this->lsync > 0) {
+
+       	        // Because mobile devices freezes background tabs we need to have bigger timeout
+       	        $timeout = 60;
+
+       	        if ($this->device_type != 0 && (strpos($this->uagent,'iPhone') !== false || strpos($this->uagent,'iPad') !== false)) {
+                    $timeout = 240;
+                }
+
+       	        $this->user_status_front =  (time() - $timeout > $this->lsync || in_array($this->status_sub,array(erLhcoreClassModelChat::STATUS_SUB_SURVEY_SHOW,erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT))) ? 1 : 0;
+
+       	    } elseif ($this->online_user !== false) {
        		    $this->user_status_front = erLhcoreClassChat::setActivityByChatAndOnlineUser($this, $this->online_user);
        		} else {
        		    $this->user_status_front = $this->user_status == self::USER_STATUS_JOINED_CHAT ? 0 : 1;
        		}
-       		
+
        		return $this->user_status_front;
        	break;	
        		
@@ -451,19 +489,37 @@ class erLhcoreClassModelChat {
    const STATUS_SUB_CONTACT_FORM = 2;
    const STATUS_SUB_USER_CLOSED_CHAT = 3;
    const STATUS_SUB_START_ON_KEY_UP = 4;
-      
+   const STATUS_SUB_SURVEY_SHOW = 5;
+   const STATUS_SUB_SURVEY_COLLECTED = 6;
+   const STATUS_SUB_OFFLINE_REQUEST = 7;
+   const STATUS_SUB_ON_HOLD = 8;
+
+   const STATUS_SUB_SUB_DEFAULT = 0;
+   const STATUS_SUB_SUB_TRANSFERED = 1;
+   const STATUS_SUB_SUB_CLOSED = 2; // Chat was previously closed, but became pending again.
+
    const USER_STATUS_JOINED_CHAT = 0;
    const USER_STATUS_CLOSED_CHAT = 1;
    const USER_STATUS_PENDING_REOPEN = 2;
    
-   
+   const OP_STATUS_ACCEPT_ONLINE = 0;
+   const OP_STATUS_ACCEPT_OFFLINE = 1;
    
    public $id = null;
    public $nick = '';
+   
+   // General chat statusses
    public $status = self::STATUS_PENDING_CHAT;
+   
+   // Used for visitors
    public $status_sub = self::STATUS_SUB_DEFAULT;
+   
+   // Used for operators
+   public $status_sub_sub = self::STATUS_SUB_SUB_DEFAULT;
+   
    public $time = '';
-   public $user_id = '';
+   public $user_id = 0;
+   public $sender_user_id = 0;
    public $hash = '';
    public $ip = '';
    public $referrer = '';
@@ -490,16 +546,21 @@ class erLhcoreClassModelChat {
    public $chat_duration = 0;
    public $priority = 0;
    public $online_user_id = 0;
+   public $lsync = 0;
 
    // Transfer attributes
    public $transfer_if_na = 0;
    public $transfer_timeout_ts = 0;
    public $transfer_timeout_ac = 0;
+   public $transfer_uid = 0;
 
    // Wait timeout attributes
-   public $wait_timeout = 0;
-   public $wait_timeout_send = 0;
-   public $timeout_message = '';
+   //public $wait_timeout = 0;
+   //public $wait_timeout_send = 0;
+   //public $timeout_message = '';
+   //public $wait_timeout_repeat = 0;
+   
+   public $auto_responder_id = 0;
    
    // User timezone identifier
    public $user_tz_identifier = '';
@@ -528,8 +589,6 @@ class erLhcoreClassModelChat {
    
    public $screenshot_id = 0;
    
-   public $wait_timeout_repeat = 0;
-   
    public $unread_messages_informed = 0;
    
    public $reinform_timeout = 0;
@@ -550,6 +609,10 @@ class erLhcoreClassModelChat {
    
    public $product_id = 0;
    
+   public $usaccept = self::OP_STATUS_ACCEPT_ONLINE;
+   
+   public $status_sub_arg = '';
+   
    // Time since last assignment
    public $tslasign = 0;
    
@@ -557,6 +620,11 @@ class erLhcoreClassModelChat {
    
    public $chat_locale_to = '';
    
+   public $uagent = '';
+   
+   // 0 - PC, 1 - mobile, 2 - tablet
+   public $device_type = 0;
+
    public $updateIgnoreColumns = array();
 }
 

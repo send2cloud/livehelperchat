@@ -12,7 +12,32 @@ if ( isset($_POST['StoreAutologinSettings']) ) {
         ),
         'enabled' => new ezcInputFormDefinitionElement(
             ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
-        )           
+        ),
+        'URL' => new ezcInputFormDefinitionElement(
+            ezcInputFormDefinitionElement::OPTIONAL, 'string',
+            null,
+            FILTER_REQUIRE_ARRAY
+        ),
+        'UserID' => new ezcInputFormDefinitionElement(
+            ezcInputFormDefinitionElement::OPTIONAL, 'int',
+            null,
+            FILTER_REQUIRE_ARRAY
+        ),
+        'SecretHash' => new ezcInputFormDefinitionElement(
+            ezcInputFormDefinitionElement::OPTIONAL, 'string',
+            null,
+            FILTER_REQUIRE_ARRAY
+        ),
+        'IP' => new ezcInputFormDefinitionElement(
+            ezcInputFormDefinitionElement::OPTIONAL, 'string',
+            null,
+            FILTER_REQUIRE_ARRAY
+        ),
+        'siteAccess' => new ezcInputFormDefinitionElement(
+            ezcInputFormDefinitionElement::OPTIONAL, 'string',
+            null,
+            FILTER_REQUIRE_ARRAY
+        )
     );
     
     if (!isset($_POST['csfr_token']) || !$currentUser->validateCSFRToken($_POST['csfr_token'])) {
@@ -36,6 +61,21 @@ if ( isset($_POST['StoreAutologinSettings']) ) {
             $data['enabled'] = 1;
         } else {
             $data['enabled'] = 0;
+        }
+
+        $data['autologin_options'] = array();
+        if ( $form->hasValidData( 'UserID' ) && !empty($form->UserID)) {
+            foreach ($form->UserID as $key => $userId) {
+                $data['autologin_options'][] = array(
+                    'user_id' => $userId,
+                    'url' => $form->URL[$key],
+                    'ip' => $form->IP[$key],
+                    'secret_hash' => $form->SecretHash[$key],
+                    'site_access' => $form->siteAccess[$key]
+                );
+            }
+        } else {
+            $data['autologin_options'] = [];
         }
                    
         $autologinData->value = serialize($data);

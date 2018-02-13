@@ -19,6 +19,21 @@ $def->properties['time_on_site']->columnName   = 'time_on_site';
 $def->properties['time_on_site']->propertyName = 'time_on_site';
 $def->properties['time_on_site']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
 
+$def->properties['delay'] = new ezcPersistentObjectProperty();
+$def->properties['delay']->columnName   = 'delay';
+$def->properties['delay']->propertyName = 'delay';
+$def->properties['delay']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['delay_init'] = new ezcPersistentObjectProperty();
+$def->properties['delay_init']->columnName   = 'delay_init';
+$def->properties['delay_init']->propertyName = 'delay_init';
+$def->properties['delay_init']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['show_instant'] = new ezcPersistentObjectProperty();
+$def->properties['show_instant']->columnName   = 'show_instant';
+$def->properties['show_instant']->propertyName = 'show_instant';
+$def->properties['show_instant']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
 $def->properties['pageviews'] = new ezcPersistentObjectProperty();
 $def->properties['pageviews']->columnName   = 'pageviews';
 $def->properties['pageviews']->propertyName = 'pageviews';
@@ -59,27 +74,16 @@ $def->properties['operator_ids']->columnName   = 'operator_ids';
 $def->properties['operator_ids']->propertyName = 'operator_ids';
 $def->properties['operator_ids']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
 
-$def->properties['wait_message'] = new ezcPersistentObjectProperty();
-$def->properties['wait_message']->columnName   = 'wait_message';
-$def->properties['wait_message']->propertyName = 'wait_message';
-$def->properties['wait_message']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
-
 // Department ID
 $def->properties['dep_id'] = new ezcPersistentObjectProperty();
 $def->properties['dep_id']->columnName   = 'dep_id';
 $def->properties['dep_id']->propertyName = 'dep_id';
 $def->properties['dep_id']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
-// Timeout in seconds.
-$def->properties['wait_timeout'] = new ezcPersistentObjectProperty();
-$def->properties['wait_timeout']->columnName   = 'wait_timeout';
-$def->properties['wait_timeout']->propertyName = 'wait_timeout';
-$def->properties['wait_timeout']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
-
-$def->properties['repeat_number'] = new ezcPersistentObjectProperty();
-$def->properties['repeat_number']->columnName   = 'repeat_number';
-$def->properties['repeat_number']->propertyName = 'repeat_number';
-$def->properties['repeat_number']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+$def->properties['autoresponder_id'] = new ezcPersistentObjectProperty();
+$def->properties['autoresponder_id']->columnName   = 'autoresponder_id';
+$def->properties['autoresponder_id']->propertyName = 'autoresponder_id';
+$def->properties['autoresponder_id']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
 $def->properties['requires_email'] = new ezcPersistentObjectProperty();
 $def->properties['requires_email']->columnName   = 'requires_email';
@@ -101,11 +105,10 @@ $def->properties['show_random_operator']->columnName   = 'show_random_operator';
 $def->properties['show_random_operator']->propertyName = 'show_random_operator';
 $def->properties['show_random_operator']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
-// Then timeout passes show visitor this message.
-$def->properties['timeout_message'] = new ezcPersistentObjectProperty();
-$def->properties['timeout_message']->columnName   = 'timeout_message';
-$def->properties['timeout_message']->propertyName = 'timeout_message';
-$def->properties['timeout_message']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
+$def->properties['show_on_mobile'] = new ezcPersistentObjectProperty();
+$def->properties['show_on_mobile']->columnName   = 'show_on_mobile';
+$def->properties['show_on_mobile']->propertyName = 'show_on_mobile';
+$def->properties['show_on_mobile']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
 // How many times show invitation popup before it gets hidden automatically
 $def->properties['hide_after_ntimes'] = new ezcPersistentObjectProperty();
@@ -137,6 +140,29 @@ $def->properties['tag']->columnName   = 'tag';
 $def->properties['tag']->propertyName = 'tag';
 $def->properties['tag']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
 
+// Is it dynamic invitation
+$def->properties['dynamic_invitation'] = new ezcPersistentObjectProperty();
+$def->properties['dynamic_invitation']->columnName   = 'dynamic_invitation';
+$def->properties['dynamic_invitation']->propertyName = 'dynamic_invitation';
+$def->properties['dynamic_invitation']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// Mouse iddle timeout
+$def->properties['iddle_for'] = new ezcPersistentObjectProperty();
+$def->properties['iddle_for']->columnName   = 'iddle_for';
+$def->properties['iddle_for']->propertyName = 'iddle_for';
+$def->properties['iddle_for']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// Dynamic event type
+$def->properties['event_type'] = new ezcPersistentObjectProperty();
+$def->properties['event_type']->columnName   = 'event_type';
+$def->properties['event_type']->propertyName = 'event_type';
+$def->properties['event_type']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// Event invitation
+$def->properties['event_invitation'] = new ezcPersistentObjectProperty();
+$def->properties['event_invitation']->columnName   = 'event_invitation';
+$def->properties['event_invitation']->propertyName = 'event_invitation';
+$def->properties['event_invitation']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
 return $def;
 

@@ -11,6 +11,10 @@ try {
 
 $tpl->set('tab',$Params['user_parameters_unordered']['tab'] == 'canned' ? 'tab_canned' : '');
 
+$can_edit_groups = erLhcoreClassGroupRole::canEditUserGroups(erLhcoreClassUser::instance()->getUserData(), $UserData);
+
+$groups_can_edit = erLhcoreClassUser::instance()->hasAccessTo('lhuser', 'editusergroupall') == true ? true : erLhcoreClassGroupRole::getGroupsAccessedByUser(erLhcoreClassUser::instance()->getUserData());
+
 if (isset($_POST['Update_account']) || isset($_POST['Save_account'])) {
 	
 	if (!isset($_POST['csfr_token']) || !$currentUser->validateCSFRToken($_POST['csfr_token'])) {
@@ -18,7 +22,9 @@ if (isset($_POST['Update_account']) || isset($_POST['Save_account'])) {
 		exit;
 	}
 	
-	$Errors = erLhcoreClassUserValidator::validateUserEdit($UserData);
+	$params = array('can_edit_groups' => $can_edit_groups, 'groups_can_edit' => $groups_can_edit);
+	
+	$Errors = erLhcoreClassUserValidator::validateUserEdit($UserData, $params);
 	
     if ( isset($_POST['DeletePhoto']) ) {
     	$UserData->removeFile();
@@ -36,8 +42,10 @@ if (isset($_POST['Update_account']) || isset($_POST['Save_account'])) {
 
         erLhcoreClassUserDep::setHideOnlineStatus($UserData);
         
-		$UserData->setUserGroups();
-
+        if ($can_edit_groups == true) {
+            $UserData->setUserGroups();
+        }
+        
         $CacheManager = erConfigClassLhCacheConfig::getInstance();
         $CacheManager->expireCache();
        
@@ -52,8 +60,7 @@ if (isset($_POST['Update_account']) || isset($_POST['Save_account'])) {
 
     }  else {
         $tpl->set('errors',$Errors);
-    }
-    
+    }    
 }
 
 if (isset($_POST['UpdatePending_account'])) {
@@ -61,10 +68,23 @@ if (isset($_POST['UpdatePending_account'])) {
 		erLhcoreClassModule::redirect('user/edit', '/'.$UserData->id);
 		exit;
 	}
+
+    $pendingSettings = erLhcoreClassUserValidator::validateShowAllPendingOption();
 	
-	$showAllPending = erLhcoreClassUserValidator::validateShowAllPendingOption();
-	
-	erLhcoreClassModelUserSetting::setSetting('show_all_pending', $showAllPending, $UserData->id);
+	erLhcoreClassModelUserSetting::setSetting('show_all_pending', $pendingSettings['show_all_pending'], $UserData->id);
+
+    $UserData->auto_accept = $pendingSettings['auto_accept'];
+    $UserData->max_active_chats = $pendingSettings['max_chats'];
+    $UserData->exclude_autoasign = $pendingSettings['exclude_autoasign'];
+    $UserData->saveThis();
+
+    // Update max active chats directly
+    $db = ezcDbInstance::get();
+    $stmt = $db->prepare('UPDATE lh_userdep SET max_chats = :max_chats,exclude_autoasign = :exclude_autoasign WHERE user_id = :user_id');
+    $stmt->bindValue(':max_chats', $UserData->max_active_chats, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id', $UserData->id, PDO::PARAM_INT);
+    $stmt->bindValue(':exclude_autoasign', $UserData->exclude_autoasign, PDO::PARAM_INT);
+    $stmt->execute();
 
 	$tpl->set('account_updated','done');
 	$tpl->set('tab','tab_pending');
@@ -79,21 +99,33 @@ if (isset($_POST['UpdateDepartaments_account'])) {
 	}
 	
 	$globalDepartament = erLhcoreClassUserValidator::validateDepartments($UserData, array('all_departments_0_global_value' => -1));
-			
+
+    $readOnlyDepartments = array();
+    if (isset($_POST['UserDepartamentRead']) && count($_POST['UserDepartamentRead']) > 0) {
+        $readOnlyDepartments = $_POST['UserDepartamentRead'];
+    }
+
 	erLhcoreClassUser::getSession()->update($UserData);
    
 	if (count($globalDepartament) > 0) {
-		erLhcoreClassUserDep::addUserDepartaments($globalDepartament, $UserData->id, $UserData);
+		erLhcoreClassUserDep::addUserDepartaments($globalDepartament, $UserData->id, $UserData, $readOnlyDepartments);
 	} else {
-    	erLhcoreClassUserDep::addUserDepartaments(array(), $UserData->id, $UserData);
+    	erLhcoreClassUserDep::addUserDepartaments(array(), $UserData->id, $UserData, $readOnlyDepartments);
 	}
 	
 	erLhcoreClassModelDepartamentGroupUser::addUserDepartmentGroups($UserData, erLhcoreClassUserValidator::validateDepartmentsGroup($UserData));
+	
+	erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.after_user_departments_update',array('user' => & $UserData));
 	
 	$tpl->set('account_updated_departaments','done');
    
 }
 
+
+$userGroupFilter = $groups_can_edit === true ? array() : array('filterin' => array('id' => $groups_can_edit));
+
+$tpl->set('user_groups_filter',$userGroupFilter);
+$tpl->set('can_edit_groups',$can_edit_groups);
 $tpl->set('user',$UserData);
 
 $Result['content'] = $tpl->fetch();

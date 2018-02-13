@@ -5,7 +5,6 @@
  * */
 
 class erLhcoreClassAdminChatValidatorHelper {
-
     
     public static function validateCannedMessage(erLhcoreClassModelCannedMsg & $cannedMessage, $userDepartments) {
         $definition = array(
@@ -32,7 +31,13 @@ class erLhcoreClassAdminChatValidatorHelper {
             ),
             'AutoSend' => new ezcInputFormDefinitionElement(
                 ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
-            )
+            ),
+            'Tags' => new ezcInputFormDefinitionElement(
+                ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw'
+            ),
+            'languages' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw',null,FILTER_REQUIRE_ARRAY),
+            'message_lang' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw',null,FILTER_REQUIRE_ARRAY),
+            'fallback_message_lang' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw',null,FILTER_REQUIRE_ARRAY),
         );
         
         $form = new ezcInputForm( INPUT_POST, $definition );
@@ -49,7 +54,22 @@ class erLhcoreClassAdminChatValidatorHelper {
         {
             $cannedMessage->fallback_msg = $form->FallbackMessage;
         }
-        
+
+        $languagesData = array();
+        if ( $form->hasValidData( 'languages' ) && !empty($form->languages) )
+        {
+            foreach ($form->languages as $index => $languages) {
+                $languagesData[] = array(
+                    'message' => $form->message_lang[$index],
+                    'fallback_message' => $form->fallback_message_lang[$index],
+                    'languages' => $form->languages[$index],
+                );
+            }
+        }
+
+        $cannedMessage->languages = json_encode($languagesData);
+        $cannedMessage->languages_array = $languagesData;
+
         if ( $form->hasValidData( 'Title' ) )
         {
             $cannedMessage->title = $form->Title;
@@ -75,6 +95,11 @@ class erLhcoreClassAdminChatValidatorHelper {
         if ( $form->hasValidData( 'Delay' )  )
         {
             $cannedMessage->delay = $form->Delay;
+        }
+        
+        if ( $form->hasValidData( 'Tags' )  )
+        {
+            $cannedMessage->tags_plain = $form->Tags;
         }
         
         if ( $form->hasValidData( 'DepartmentID' )  ) {
@@ -119,6 +144,12 @@ class erLhcoreClassAdminChatValidatorHelper {
 	            ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
 	        ),
 	        'NameHidden' => new ezcInputFormDefinitionElement(
+	            ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+	        ),
+            'RequiresPrefilledDepartment' => new ezcInputFormDefinitionElement(
+	            ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+	        ),
+            'RequireLockForPassedDepartment' => new ezcInputFormDefinitionElement(
 	            ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
 	        ),
 	        'NameRequireOption' => new ezcInputFormDefinitionElement(
@@ -280,12 +311,18 @@ class erLhcoreClassAdminChatValidatorHelper {
 	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
 	        ),
 	        'customFieldIsrequired' => new ezcInputFormDefinitionElement(
-	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
+	            ezcInputFormDefinitionElement::OPTIONAL, 'boolean', null, FILTER_REQUIRE_ARRAY
 	        ),
 	        'customFieldDefaultValue' => new ezcInputFormDefinitionElement(
 	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
 	        ),
+            'customFieldOptions' => new ezcInputFormDefinitionElement(
+	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
+	        ),
 	        'customFieldIdentifier' => new ezcInputFormDefinitionElement(
+	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
+	        ),
+            'customFieldCondition' => new ezcInputFormDefinitionElement(
 	            ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
 	        ),
 	        'CustomFieldsEncryption' => new ezcInputFormDefinitionElement(
@@ -307,14 +344,26 @@ class erLhcoreClassAdminChatValidatorHelper {
 	    } else {
 	        $data['force_leave_a_message'] = false;
 	    }
-	    
+
 	    // TOS
 	    if ( $form->hasValidData( 'TOSVisibleInPopup' ) && $form->TOSVisibleInPopup == true ) {
 	        $data['tos_visible_in_popup'] = true;
 	    } else {
 	        $data['tos_visible_in_popup'] = false;
 	    }
-	    
+
+	    if ( $form->hasValidData( 'RequiresPrefilledDepartment' ) && $form->RequiresPrefilledDepartment == true ) {
+	        $data['requires_dep'] = true;
+	    } else {
+	        $data['requires_dep'] = false;
+	    }
+
+	    if ( $form->hasValidData( 'RequireLockForPassedDepartment' ) && $form->RequireLockForPassedDepartment == true ) {
+	        $data['requires_dep_lock'] = true;
+	    } else {
+	        $data['requires_dep_lock'] = false;
+	    }
+
 	    if ( $form->hasValidData( 'ShowMessagesBox' ) && $form->ShowMessagesBox == true ) {
 	        $data['show_messages_box'] = true;
 	    } else {
@@ -623,18 +672,20 @@ class erLhcoreClassAdminChatValidatorHelper {
 	    } else {
 	        $data['offline_message_require_option'] = 'required';
 	    }
-	    
+
 	    if ( $form->hasValidData( 'customFieldType' ) && !empty($form->customFieldType)) {
 	        $customFields = array();
 	        foreach ($form->customFieldType as $key => $customFieldType) {
 	            $customFields[] = array(
 	                'fieldname' => $form->customFieldLabel[$key],
 	                'defaultvalue' => $form->customFieldDefaultValue[$key],
+	                'options' => $form->customFieldOptions[$key],
 	                'fieldtype' => $customFieldType,
 	                'size' => $form->customFieldSize[$key],
 	                'visibility' => $form->customFieldVisibility[$key],
-	                'isrequired' => $form->customFieldIsrequired[$key],
+	                'isrequired' => ($form->hasValidData('customFieldIsrequired') && isset($form->customFieldIsrequired[$key]) && $form->customFieldIsrequired[$key] == true),
 	                'fieldidentifier' => $form->customFieldIdentifier[$key],
+	                'showcondition' => $form->customFieldCondition[$key],
 	            );
 	        }
 	        $data['custom_fields'] = json_encode($customFields,JSON_HEX_APOS);

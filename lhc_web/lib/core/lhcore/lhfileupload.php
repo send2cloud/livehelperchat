@@ -33,17 +33,22 @@ class erLhcoreClassFileUpload extends UploadHandler {
     		$uploadFileName = $name;
     	}
 
-    	if (!preg_match($this->options['accept_file_types_lhc'], $uploadFileName)) {
-    		$file->error = $this->get_error_message('accept_file_types');
-    		return false;
-    	}
-
         $file = parent::handle_file_upload(
         	$uploaded_file, $name, $size, $type, $error, $index, $content_range
         );
 
-        if (empty($file->error)) {
+        if (!preg_match($this->options['accept_file_types_lhc'], $uploadFileName)) {
+            $file->error = $this->get_error_message('accept_file_types');
+            return false;
+        }
 
+        if (isset($this->options['antivirus']) && $this->options['antivirus'] !== false && is_object($this->options['antivirus']) && !$this->options['antivirus']->scan(realpath($this->options['upload_dir'] . $file->name ))) {
+            unlink($this->options['upload_dir'] . $file->name);
+            erLhcoreClassFileUpload::removeRecursiveIfEmpty('var/', str_replace('var/', '', $this->options['upload_dir']));
+            $file->error = 'Virus found in file!';
+        }
+
+        if (empty($file->error)) {
         	$fileUpload = new erLhcoreClassModelChatFile();
         	$fileUpload->size = $file->size;
         	$fileUpload->type = $file->type;
@@ -93,10 +98,14 @@ class erLhcoreClassFileUpload extends UploadHandler {
     	        }
     
     	        $chat->has_unread_messages = 1;
-    	        $chat->updateThis();	        	            
+    	        $chat->updateThis();
+
+                erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.web_add_msg_admin',array('msg' => & $msg,'chat' => & $chat));
 	        }
 	        
 	        $this->uploadedFile = $fileUpload;
+        } else {
+            $this->uploadedFile = $file;
         }
 
         return $file;

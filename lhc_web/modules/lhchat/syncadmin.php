@@ -1,5 +1,6 @@
 <?php
 
+header ( 'content-type: application/json; charset=utf-8' );
 $timeCurrent = time();
 $pollingEnabled = (int)erLhcoreClassModelChatConfig::fetchCache('sync_sound_settings')->data['long_polling_enabled'];
 $pollingServerTimeout = (int)erLhcoreClassModelChatConfig::fetchCache('sync_sound_settings')->data['connection_timeout'];
@@ -39,8 +40,10 @@ if (isset($_POST['chats']) && is_array($_POST['chats']) && count($_POST['chats']
     	try {    	
 		    foreach ($_POST['chats'] as $chat_id_list)
 		    {
-		        list($chat_id,$MessageID) = explode(',',$chat_id_list);
-		
+		        list($chat_id, $MessageID ) = explode(',',$chat_id_list);
+		        $chat_id = (int)$chat_id;
+		        $MessageID = (int)$MessageID;
+		        
 		        $Chat = erLhcoreClassModelChat::fetch($chat_id);
 		        $Chat->updateIgnoreColumns = array('last_msg_id');
 		        
@@ -51,12 +54,23 @@ if (isset($_POST['chats']) && is_array($_POST['chats']) && count($_POST['chats']
 		            if ( ($Chat->last_msg_id > (int)$MessageID) && count($Messages = erLhcoreClassChat::getPendingMessages($chat_id,$MessageID)) > 0)
 		            {
 		            	// If chat had flag that it contains unread messages set to 0
-		            	if ( $Chat->has_unread_messages == 1 || $Chat->unread_messages_informed == 1) {
+		            	if ( ($Chat->user_id == $currentUser->getUserID()) && ($Chat->has_unread_messages == 1 || $Chat->unread_messages_informed == 1)) {
 		            		 $Chat->has_unread_messages = 0;
 		            		 $Chat->unread_messages_informed = 0;
 		            		 $Chat->saveThis();
 		            	}
 		
+		            	// Auto accept transfered chats if I have opened this chat
+		            	if ($Chat->status == erLhcoreClassModelChat::STATUS_OPERATORS_CHAT) {
+		            	    
+		            	   $q = $db->createDeleteQuery();
+       
+                           // Delete transfered chat's to me
+                           $q->deleteFrom( 'lh_transfer' )->where( $q->expr->eq( 'chat_id', $Chat->id ), $q->expr->eq( 'transfer_to_user_id', $currentUser->getUserID() ) );
+                           $stmt = $q->prepare();
+                           $stmt->execute();
+		            	}
+		            	
 		            	$newMessagesNumber = count($Messages);
 		
 		                $tpl->set('messages',$Messages);
@@ -90,16 +104,14 @@ if (isset($_POST['chats']) && is_array($_POST['chats']) && count($_POST['chats']
 		                $ReturnMessages[] = $response;
 		            }
 
+		            $lp = $Chat->lsync > 0 ? time()-$Chat->lsync : false;
+
 		            if ($Chat->is_user_typing == true) {
-		                $ReturnStatuses[$chat_id] = array('chat_id' => $chat_id, 'us' => $Chat->user_status_front, 'tp' => 'true','tx' => htmlspecialchars($Chat->user_typing_txt));
+		                $ReturnStatuses[$chat_id] = array('cs' => $Chat->status, 'co' => $Chat->user_id, 'cdur' => $Chat->chat_duration_front, 'lmsg' => erLhcoreClassChat::formatSeconds(time() - ($Chat->last_user_msg_time > 0 ? $Chat->last_user_msg_time : $Chat->time)), 'chat_id' => $chat_id, 'lp' => $lp, 'um' => $Chat->has_unread_op_messages, 'us' => $Chat->user_status_front, 'tp' => 'true','tx' => htmlspecialchars($Chat->user_typing_txt));
 		            } else {
-		                $ReturnStatuses[$chat_id] = array('chat_id' => $chat_id, 'us' => $Chat->user_status_front, 'tp' => 'false');
+		                $ReturnStatuses[$chat_id] = array('cs' => $Chat->status, 'co' => $Chat->user_id, 'cdur' => $Chat->chat_duration_front, 'lmsg' => erLhcoreClassChat::formatSeconds(time() - ($Chat->last_user_msg_time > 0 ? $Chat->last_user_msg_time : $Chat->time)), 'chat_id' => $chat_id, 'lp' => $lp, 'um' => $Chat->has_unread_op_messages, 'us' => $Chat->user_status_front, 'tp' => 'false');
 		            }
 
-		            if ($Chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT || $Chat->status == erLhcoreClassModelChat::STATUS_CLOSED_CHAT) {
-		                $ReturnStatuses[$chat_id]['uc'] = 'true';
-		            }
-		            
 		            if ($Chat->operation_admin != '') {
 		            	$ReturnStatuses[$chat_id]['oad'] = $Chat->operation_admin;
 		            	$Chat->operation_admin = '';
@@ -134,6 +146,6 @@ if (isset($_POST['chats']) && is_array($_POST['chats']) && count($_POST['chats']
 
 
 
-echo json_encode(array('error' => 'false','uw' => $userOwner, 'result_status' => $content_status, 'result' => $content ));
+echo erLhcoreClassChat::safe_json_encode(array('error' => 'false','uw' => $userOwner, 'result_status' => $content_status, 'result' => $content ));
 exit;
 ?>

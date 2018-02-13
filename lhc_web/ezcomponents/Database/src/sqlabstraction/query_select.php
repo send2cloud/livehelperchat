@@ -124,6 +124,13 @@ class ezcQuerySelect extends ezcQuery
     protected $lastInvokedMethod = null;
 
     /**
+     * Stores lock string for select
+     *
+     * @var string
+     */
+    protected $lockString = null;
+    
+    /**
      * Constructs a new ezcQuery object.
      *
      * For an introduction to aliases see {@link ezcQuery::__construct()}.
@@ -418,7 +425,7 @@ class ezcQuerySelect extends ezcQuery
         }
 
         // using from()->*Join() syntax assumed, so check if last call was to from()
-        if ( $this->lastInvokedMethod != 'from' )
+        if ( $this->lastInvokedMethod != 'from' && $this->lastInvokedMethod != 'useindex')
         {
             throw new ezcQueryInvalidException( 'SELECT', "Invoking {$type}Join() not immediately after from()." );
         }
@@ -675,7 +682,7 @@ class ezcQuerySelect extends ezcQuery
     {
     	if ( $this->useIndexString == null )
     	{
-    		$this->useIndexString = 'USE INDEX ';
+    		$this->useIndexString = ' USE INDEX ';
     	}
 
     	$args = func_get_args();
@@ -688,6 +695,8 @@ class ezcQuerySelect extends ezcQuery
     	$this->lastInvokedMethod = 'useindex';
 
     	$this->useIndexString .= ' ( ' . join( ' , ', $expressions ) . ' ) ';
+
+        $this->fromString .= $this->useIndexString;
 
     	return $this;
     }
@@ -861,6 +870,17 @@ class ezcQuerySelect extends ezcQuery
     }
 
     /**
+     * Appends lock query
+     * 
+     */
+    public function doLock()
+    {
+        $this->lockString = 'FOR UPDATE';
+        
+        return $this;
+    }
+    
+    /**
      * Returns dummy table name.
      *
      * If your select query just evaluates an expression
@@ -902,11 +922,6 @@ class ezcQuerySelect extends ezcQuery
             $query = "{$query} {$this->fromString}";
         }
 
-        if ( $this->useIndexString != null )
-        {
-        	$query = "{$query} {$this->useIndexString}";
-        }
-
         if ( $this->whereString != null )
         {
             $query = "{$query} {$this->whereString}";
@@ -927,6 +942,12 @@ class ezcQuerySelect extends ezcQuery
         {
             $query = "{$query} {$this->limitString}";
         }
+        
+        if ( $this->lockString != null )
+        {
+            $query = "{$query} {$this->lockString}";
+        }
+
         return $query;
     }
 

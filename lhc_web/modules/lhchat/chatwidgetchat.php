@@ -31,11 +31,11 @@ if ($Params['user_parameters_unordered']['cstarted'] !== null && $Params['user_p
 	$Result['parent_messages'][] = 'lh_callback:' . (string)strip_tags($Params['user_parameters_unordered']['cstarted']);
 }
 
-
-
 try {
-
-    $chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $Params['user_parameters']['chat_id']);
+    $db = ezcDbInstance::get();
+    $db->beginTransaction();
+    
+    $chat = erLhcoreClassModelChat::fetchAndLock($Params['user_parameters']['chat_id']);
 
     erLhcoreClassChat::setTimeZoneByChat($chat);
  
@@ -58,12 +58,16 @@ try {
                 
         $Result['chat'] = $chat;
 
-        // User online
-        if ($chat->user_status != 0) {
+        // If survey send parent message instantly
+        if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_SURVEY_SHOW) {
+            $args = erLhcoreClassChatHelper::getSubStatusArguments($chat);
+            $Result['parent_messages'][] = 'lhc_chat_closed' . ($args != '' ? ':' . $args : '');
+        }
 
-        	$db = ezcDbInstance::get();
-        	$db->beginTransaction();
-	        	
+        // User online
+        if ( $chat->user_status != 0) {
+
+    	    if ($chat->user_status != 0) {
 	        	$chat->support_informed = 1;
 	        	$chat->user_typing = time();// Show for shorter period these status messages
 	        	$chat->is_user_typing = 1;
@@ -88,21 +92,36 @@ try {
 	        		$onlineuser->reopen_chat = 0;
 	        		$onlineuser->saveThis();
 	        	}
-	        		        	
-	        	$chat->user_status = erLhcoreClassModelChat::USER_STATUS_JOINED_CHAT;
-	        	erLhcoreClassChat::getSession()->update($chat);
 
-        	$db->commit();
+	        	$chat->user_status = erLhcoreClassModelChat::USER_STATUS_JOINED_CHAT;
+
+                $nick = isset($_GET['prefill']['username']) ? trim($_GET['prefill']['username']) : '';
+
+	        	// Update nick if required
+	        	if (isset($_GET['prefill']['username']) && $chat->nick != $_GET['prefill']['username'] && !empty($nick) && $chat->nick == erTranslationClassLhTranslation::getInstance()->getTranslation('chat/startchat','Visitor')) {
+	        	    $chat->nick = $_GET['prefill']['username'];
+	        	    $chat->operation_admin .= "lhinst.updateVoteStatus(".$chat->id.");";
+	        	    
+                    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.nickchanged', array('chat' => & $chat));
+	        	}
+
+	        	erLhcoreClassChat::getSession()->update($chat);
+    	    }
         };
 
         erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.chatwidgetchat',array('result' => & $Result , 'tpl' => & $tpl, 'params' => & $Params, 'chat' => & $chat));
+        
+        $db->commit();
+        
     } else {
         $tpl->setFile( 'lhchat/errors/chatnotexists.tpl.php');
     }
 
 } catch(Exception $e) {
+    $db->rollback();
    $tpl->setFile('lhchat/errors/chatnotexists.tpl.php');
 }
+
 if (isset($Params['user_parameters_unordered']['fullheight']) && $Params['user_parameters_unordered']['fullheight'] == 'true') {
     $Result['fullheight'] = true;
     $tpl->set('fullheight', true);
@@ -110,6 +129,7 @@ if (isset($Params['user_parameters_unordered']['fullheight']) && $Params['user_p
     $Result['fullheight'] = false;
     $tpl->set('fullheight', false);
 }
+
 $Result['content'] = $tpl->fetch();
 $Result['pagelayout'] = 'widget';
 $Result['pagelayout_css_append'] = 'widget-chat';

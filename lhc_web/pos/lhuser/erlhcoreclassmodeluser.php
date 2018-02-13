@@ -74,6 +74,11 @@ $def->properties['invisible_mode']->columnName   = 'invisible_mode';
 $def->properties['invisible_mode']->propertyName = 'invisible_mode';
 $def->properties['invisible_mode']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
+$def->properties['inactive_mode'] = new ezcPersistentObjectProperty();
+$def->properties['inactive_mode']->columnName   = 'inactive_mode';
+$def->properties['inactive_mode']->propertyName = 'inactive_mode';
+$def->properties['inactive_mode']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
 $def->properties['active_chats_counter'] = new ezcPersistentObjectProperty();
 $def->properties['active_chats_counter']->columnName   = 'active_chats_counter';
 $def->properties['active_chats_counter']->propertyName = 'active_chats_counter';
@@ -129,6 +134,21 @@ $def->properties['operation_admin'] = new ezcPersistentObjectProperty();
 $def->properties['operation_admin']->columnName   = 'operation_admin';
 $def->properties['operation_admin']->propertyName = 'operation_admin';
 $def->properties['operation_admin']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
+
+$def->properties['max_active_chats'] = new ezcPersistentObjectProperty();
+$def->properties['max_active_chats']->columnName   = 'max_active_chats';
+$def->properties['max_active_chats']->propertyName = 'max_active_chats';
+$def->properties['max_active_chats']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['auto_accept'] = new ezcPersistentObjectProperty();
+$def->properties['auto_accept']->columnName   = 'auto_accept';
+$def->properties['auto_accept']->propertyName = 'auto_accept';
+$def->properties['auto_accept']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+$def->properties['exclude_autoasign'] = new ezcPersistentObjectProperty();
+$def->properties['exclude_autoasign']->columnName   = 'exclude_autoasign';
+$def->properties['exclude_autoasign']->propertyName = 'exclude_autoasign';
+$def->properties['exclude_autoasign']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
 $def->properties['attr_int_1'] = new ezcPersistentObjectProperty();
 $def->properties['attr_int_1']->columnName   = 'attr_int_1';

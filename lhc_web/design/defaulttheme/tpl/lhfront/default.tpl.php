@@ -18,19 +18,22 @@
     $activeTabEnabled = erLhcoreClassModelUserSetting::getSetting('enable_active_list', 1);
     $closedTabEnabled = erLhcoreClassModelUserSetting::getSetting('enable_close_list', 0);
     $unreadTabEnabled = erLhcoreClassModelUserSetting::getSetting('enable_unread_list', 1);
-
+    $mchatsTabEnabled = erLhcoreClassModelUserSetting::getSetting('enable_mchats_list', 0);
+    
     $frontTabsOrder = explode(',', erLhcoreClassModelChatConfig::fetch('front_tabs')->current_value);
 
     ?>
 
     <?php include(erLhcoreClassDesign::designtpl('lhchat/onlineusers/online_settings_general.tpl.php')); ?>
 
-    <div ng-controller="OnlineCtrl as online" ng-init='groupByField = <?php echo json_encode($ogroupBy) ?>;online.maxRows=<?php echo (int)$omaxRows ?>;online.updateTimeout=<?php echo (int)$oupdTimeout ?>;online.userTimeout = <?php echo (int)$ouserTimeout ?>;online.department=<?php echo (int)$onlineDepartment ?>;online.soundEnabled=<?php echo $soundUserNotification == 1 ? 'true' : 'false' ?>;online.notificationEnabled=<?php echo $browserNotification == 1 ? 'true' : 'false' ?>'>
+    <div ng-controller="OnlineCtrl as online" ng-init='online.forbiddenVisitors=<?php $currentUser->hasAccessTo('lhchat', 'use_onlineusers') != true ? print 'true' : print 'false'?>;groupByField = <?php echo json_encode($ogroupBy) ?>;online.maxRows=<?php echo (int)$omaxRows ?>;online.updateTimeout=<?php echo (int)$oupdTimeout ?>;online.userTimeout = <?php echo (int)$ouserTimeout ?>;online.department=<?php echo (int)$onlineDepartment ?>;online.soundEnabled=<?php echo $soundUserNotification == 1 ? 'true' : 'false' ?>;online.notificationEnabled=<?php echo $browserNotification == 1 ? 'true' : 'false' ?>'>
+
+    <?php include(erLhcoreClassDesign::designtpl('lhchat/lists/open_active_chat_tab.tpl.php')); ?>
 
         <div role="tabpanel" id="tabs" ng-cloak>
             <ul class="nav nav-pills" role="tablist">
-
-
+                
+                
                 <?php foreach ($frontTabsOrder as $frontTab) : ?>
                     <?php if (trim($frontTab) == 'online_users' && $online_visitors_enabled_pre == true) : ?>
                         <?php include(erLhcoreClassDesign::designtpl('lhchat/onlineusers/section_online_users_tab.tpl.php')); ?>
@@ -142,7 +145,6 @@
             $('#right-column-page').removeAttr('id');
             $('#tabs a:first').tab('show')
         });
-        <?php include(erLhcoreClassDesign::designtpl('lhchat/part/opened_chats_js.tpl.php')); ?>
     </script>
 <?php else : ?>
 

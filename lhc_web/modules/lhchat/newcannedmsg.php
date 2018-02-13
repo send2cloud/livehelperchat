@@ -19,13 +19,13 @@ if (isset($_POST['Save_action']))
 {
     $Errors = erLhcoreClassAdminChatValidatorHelper::validateCannedMessage($CannedMessage, $userDepartments);
 
-    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_newcannedmsg', array('errors' => & $Errors));
+    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_newcannedmsg', array('departments' => $userDepartments, 'scope' => 'global', 'errors' => & $Errors, 'msg' => & $CannedMessage));
 
     if (count($Errors) == 0)
     {
         $CannedMessage->saveThis();
         
-        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.newcannedmsg', array('msg' => & $CannedMessage));
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.newcannedmsg_saved', array('msg' => & $CannedMessage));
 
         erLhcoreClassModule::redirect('chat/cannedmsg');
         exit ;
@@ -39,6 +39,7 @@ $tpl->set('canned_message',$CannedMessage);
 $tpl->set('limitDepartments',$userDepartments !== true ? array('filterin' => array('id' => $userDepartments)) : array());
 
 $Result['content'] = $tpl->fetch();
+$Result['additional_footer_js'] = '<script src="'.erLhcoreClassDesign::designJS('js/angular.lhc.cannedmsg.js').'"></script>';
 
 $Result['path'] = array(
 array('url' => erLhcoreClassDesign::baseurl('system/configuration'),'title' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/cannedmsg','System configuration')),

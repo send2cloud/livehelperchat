@@ -18,7 +18,6 @@ ALTER TABLE `lh_abstract_survey` ADD `max_stars_5_title` varchar(250) NOT NULL, 
 ALTER TABLE `lh_abstract_survey` ADD `max_stars_5_pos` int(11) NOT NULL, COMMENT='';
 ALTER TABLE `lh_abstract_survey` ADD `max_stars_5` int(11) NOT NULL, COMMENT='';
 ALTER TABLE `lh_abstract_survey` ADD `max_stars_5_enabled` int(11) NOT NULL, COMMENT='';
-ALTER TABLE `lh_abstract_survey` ADD `max_stars_5_title` varchar(250) NOT NULL, COMMENT='';
 ALTER TABLE `lh_abstract_survey` ADD `question_options_1` varchar(250) NOT NULL, COMMENT='';
 ALTER TABLE `lh_abstract_survey` ADD `question_options_1_items` text NOT NULL, COMMENT='';
 ALTER TABLE `lh_abstract_survey` ADD `question_options_1_pos` int(11) NOT NULL, COMMENT='';
@@ -79,7 +78,5 @@ ALTER TABLE `lh_abstract_survey_item` ADD INDEX `question_options_2` (`question_
 ALTER TABLE `lh_abstract_survey_item` ADD INDEX `question_options_3` (`question_options_3`);
 ALTER TABLE `lh_abstract_survey_item` ADD INDEX `question_options_4` (`question_options_4`);
 ALTER TABLE `lh_abstract_survey_item` ADD INDEX `question_options_5` (`question_options_5`);
-ALTER TABLE `lh_abstract_proactive_chat_invitation` ADD `tag` varchar(50) NOT NULL, COMMENT='';
-ALTER TABLE `lh_abstract_proactive_chat_invitation` ADD INDEX `tag` (`tag`);
 ALTER TABLE `lh_canned_msg` CHANGE `msg` `msg` longtext NOT NULL;
 ALTER TABLE `lh_msg` CHANGE `msg` `msg` longtext NOT NULL;

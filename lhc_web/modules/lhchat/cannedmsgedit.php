@@ -23,11 +23,15 @@ if ( isset($_POST['Cancel_action']) ) {
 if (isset($_POST['Update_action']) || isset($_POST['Save_action'])  )
 {
    $Errors = erLhcoreClassAdminChatValidatorHelper::validateCannedMessage($Msg, $userDepartments);
-
+   
+   erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.canned_msg_before_save',array('departments' => $userDepartments, 'errors' => & $Errors, 'msg' => & $Msg, 'scope' => 'global'));
+   
     if (count($Errors) == 0)
     {
         $Msg->saveThis();
-
+        
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.canned_msg_after_save',array('msg' => & $Msg));
+        
         if (isset($_POST['Save_action'])) {
             erLhcoreClassModule::redirect('chat/cannedmsg');
             exit;
@@ -44,6 +48,7 @@ $tpl->set('canned_message',$Msg);
 $tpl->set('limitDepartments',$userDepartments !== true ? array('filterin' => array('id' => $userDepartments)) : array());
 
 $Result['content'] = $tpl->fetch();
+$Result['additional_footer_js'] = '<script src="'.erLhcoreClassDesign::designJS('js/angular.lhc.cannedmsg.js').'"></script>';
 
 $Result['path'] = array(
 array('url' => erLhcoreClassDesign::baseurl('system/configuration'),'title' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/cannedmsg','System configuration')),

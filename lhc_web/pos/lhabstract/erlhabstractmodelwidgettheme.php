@@ -194,20 +194,29 @@ $def->properties['show_copyright']->columnName   = 'show_copyright';
 $def->properties['show_copyright']->propertyName = 'show_copyright';
 $def->properties['show_copyright']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
 
+// Used to style layout of status widget
 $def->properties['custom_status_css'] = new ezcPersistentObjectProperty();
 $def->properties['custom_status_css']->columnName   = 'custom_status_css';
 $def->properties['custom_status_css']->propertyName = 'custom_status_css';
 $def->properties['custom_status_css']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
- 
+
+// Used to style container of iframe
 $def->properties['custom_container_css'] = new ezcPersistentObjectProperty();
 $def->properties['custom_container_css']->columnName   = 'custom_container_css';
 $def->properties['custom_container_css']->propertyName = 'custom_container_css';
 $def->properties['custom_container_css']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
- 
+
+// Used in widget.php for styling
 $def->properties['custom_widget_css'] = new ezcPersistentObjectProperty();
 $def->properties['custom_widget_css']->columnName   = 'custom_widget_css';
 $def->properties['custom_widget_css']->propertyName = 'custom_widget_css';
 $def->properties['custom_widget_css']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
+
+// Used on userchat.php for popup layout styling
+$def->properties['custom_popup_css'] = new ezcPersistentObjectProperty();
+$def->properties['custom_popup_css']->columnName   = 'custom_popup_css';
+$def->properties['custom_popup_css']->propertyName = 'custom_popup_css';
+$def->properties['custom_popup_css']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
  
 $def->properties['need_help_header'] = new ezcPersistentObjectProperty();
 $def->properties['need_help_header']->columnName   = 'need_help_header';
@@ -293,6 +302,18 @@ $def->properties['show_need_help_timeout']->columnName   = 'show_need_help_timeo
 $def->properties['show_need_help_timeout']->propertyName = 'show_need_help_timeout';
 $def->properties['show_need_help_timeout']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
 
+// After how many seconds after page load show need help tooltip
+$def->properties['show_need_help_delay'] = new ezcPersistentObjectProperty();
+$def->properties['show_need_help_delay']->columnName   = 'show_need_help_delay';
+$def->properties['show_need_help_delay']->propertyName = 'show_need_help_delay';
+$def->properties['show_need_help_delay']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// After how many seconds show status widget
+$def->properties['show_status_delay'] = new ezcPersistentObjectProperty();
+$def->properties['show_status_delay']->columnName   = 'show_status_delay';
+$def->properties['show_status_delay']->propertyName = 'show_status_delay';
+$def->properties['show_status_delay']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
 // New version
 // Show voting thumbs
 $def->properties['show_voting'] = new ezcPersistentObjectProperty();
@@ -347,6 +368,21 @@ $def->properties['buble_operator_text_color'] = new ezcPersistentObjectProperty(
 $def->properties['buble_operator_text_color']->columnName   = 'buble_operator_text_color';
 $def->properties['buble_operator_text_color']->propertyName = 'buble_operator_text_color';
 $def->properties['buble_operator_text_color']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_STRING;
+
+// Show Timestamp For visitors
+$def->properties['hide_ts'] = new ezcPersistentObjectProperty();
+$def->properties['hide_ts']->columnName   = 'hide_ts';
+$def->properties['hide_ts']->propertyName = 'hide_ts';
+$def->properties['hide_ts']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+// From what width response widget layout should trigger
+// Overrides default 640px
+$def->properties['widget_response_width'] = new ezcPersistentObjectProperty();
+$def->properties['widget_response_width']->columnName   = 'widget_response_width';
+$def->properties['widget_response_width']->propertyName = 'widget_response_width';
+$def->properties['widget_response_width']->propertyType = ezcPersistentObjectProperty::PHP_TYPE_INT;
+
+erLhcoreClassChatEventDispatcher::getInstance()->dispatch('lhabstract.erlhabstractmodelwidgettheme.posdefinition',array('def' => & $def));
 
 return $def;
 

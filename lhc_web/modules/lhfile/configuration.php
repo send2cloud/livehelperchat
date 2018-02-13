@@ -14,7 +14,13 @@ if ( isset($_POST['StoreFileConfiguration']) ) {
 			'AllowedFileTypesUser' => new ezcInputFormDefinitionElement(
 					ezcInputFormDefinitionElement::OPTIONAL, 'string'
 			),
-			'MaximumFileSize' => new ezcInputFormDefinitionElement(
+            'ClamAVSocketPath' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'string'
+			),
+			'ClamAVSocketLength' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'int'
+			),
+            'MaximumFileSize' => new ezcInputFormDefinitionElement(
 					ezcInputFormDefinitionElement::OPTIONAL, 'int'
 			),
 			'ActiveFileUploadUser' => new ezcInputFormDefinitionElement(
@@ -22,13 +28,45 @@ if ( isset($_POST['StoreFileConfiguration']) ) {
 			),
 			'ActiveFileUploadAdmin' => new ezcInputFormDefinitionElement(
 					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+			),
+            'AntivirusFileScanEnabled' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+			),
+            'typeDelete' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'string', null, FILTER_REQUIRE_ARRAY
+			),
+            'typeChatDelete' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'string', null, FILTER_REQUIRE_ARRAY
+			),
+            'mdays_older' => new ezcInputFormDefinitionElement(
+					ezcInputFormDefinitionElement::OPTIONAL, 'int', array('min_range' => 1)
 			)
 	);
+
 
 	$Errors = array();
 
 	$form = new ezcInputForm( INPUT_POST, $definition );
 	$Errors = array();
+
+
+    if ( $form->hasValidData( 'typeDelete' ) && is_array($form->typeDelete)) {
+        $data['mtype_delete'] = $form->typeDelete;
+    } else {
+        $data['mtype_delete'] = array();
+    }
+
+    if ( $form->hasValidData( 'typeChatDelete' ) && is_array($form->typeChatDelete)) {
+        $data['mtype_cdelete'] = $form->typeChatDelete;
+    } else {
+        $data['mtype_cdelete'] = array();
+    }
+
+    if ( $form->hasValidData( 'mdays_older' )) {
+        $data['mdays_older'] = $form->mdays_older;
+    } else {
+        $data['mdays_older'] = null;
+    }
 
 	if ( $form->hasValidData( 'ActiveFileUploadUser' ) && $form->ActiveFileUploadUser == true ) {
 		$data['active_user_upload'] = true;
@@ -40,6 +78,12 @@ if ( isset($_POST['StoreFileConfiguration']) ) {
 		$data['active_admin_upload'] = true;
 	} else {
 		$data['active_admin_upload'] = false;
+	}
+
+	if ( $form->hasValidData( 'AntivirusFileScanEnabled' ) && $form->AntivirusFileScanEnabled == true ) {
+		$data['clamav_enabled'] = true;
+	} else {
+		$data['clamav_enabled'] = false;
 	}
 
 	if ( $form->hasValidData( 'AllowedFileTypes' ) && $form->AllowedFileTypes != '' ) {
@@ -60,10 +104,26 @@ if ( isset($_POST['StoreFileConfiguration']) ) {
 		$Errors[] = erTranslationClassLhTranslation::getInstance()->getTranslation('file/configuration','Please enter valid maximum file size!');
 	}
 
+	if ( $form->hasValidData( 'ClamAVSocketPath' ) ) {
+		$data['clamd_sock'] = $form->ClamAVSocketPath;
+	} else {
+		$Errors[] = erTranslationClassLhTranslation::getInstance()->getTranslation('file/configuration','Please enter valid maximum file size!');
+	}
+
+	if ( $form->hasValidData( 'ClamAVSocketLength' ) ) {
+		$data['clamd_sock_len'] = $form->ClamAVSocketLength;
+	} else {
+		$Errors[] = erTranslationClassLhTranslation::getInstance()->getTranslation('file/configuration','Please enter valid maximum file size!');
+	}
+
 	if (empty($Errors) ) {
 
 		$fileData->value = serialize($data);
 		$fileData->saveThis();
+
+        // Cleanup cache to recompile templates etc.
+        $CacheManager = erConfigClassLhCacheConfig::getInstance();
+        $CacheManager->expireCache();
 
 	  	$tpl->set('updated','done');
     }  else {

@@ -1,3 +1,283 @@
+2.86v
+
+1. Option to allow read only chats. In user account editing window you can choose what type of assignment it should be. Read only or write also.
+
+execute doc/update_db/update_161.sql for update
+
+2.85v
+
+1. Database charset changed to utf8mb4 to support emoji
+
+execute doc/update_db/update_160.sql for update
+
+2.84v
+
+1. Option to delay status widget show.
+2. Option to delay tooltip show.
+
+execute doc/update_db/update_159.sql for update
+
+2.83v
+
+1. Autoresponder now supports custom nick. Multi language also supported.
+2. Chart charts can exclude or include only offline requests.
+3. Transfer to chat modal window now allows to change chat owner directly. "lhchat","changeowner" (Allow operator to change chat owner) is required.
+4. User account window allows to change operator online/offline status directly.
+
+execute doc/update_db/update_158.sql for update
+
+2.82v
+
+1. Quote selection sometimes forced chat messages to collapse.
+2. Option to have online visitors and their footprint cleanup from cronjob.
+
+execute doc/update_db/update_157.sql for update
+
+2.81v
+
+1. Delays for proactive invitations.
+2. Quoting functionality. Just select a text in message.
+3. Survey results export in XLS, JSON, XML
+4. Dashboard widgets filtering by users, users groups, departments groups.
+5. Forbid sending messages to chat once visitor was redirected to survey.
+6. New colours for chat messages.
+7. Above messages block will be shown time since last user message.
+8. Chat duration will be dynamically updated. It's either chat duration from first and last message or time since chat start if chat is not closed.
+
+execute doc/update_db/update_156.sql for update
+
+2.80v
+
+1. Multilanguage support for canned messages and auto responders.
+2. Survey grouping fix
+3. Save user browser language within chat.
+4. Reopen chat in same place then chat information was edited.
+5. Archive enhancements
+6. Video embed support
+
+execute doc/update_db/update_155.sql for update
+
+2.79v
+
+1. Automatic chat archive options.
+execute doc/update_db/update_154.sql for update
+
+2.78v
+
+1. Option to set delay, between new chat can be assigned to operator since last assignment.
+2. Option to have auto chat acceptance. If chat is automatically assigned it's possible now that new chat will be opened automatically to operator.
+3. Option to exclude operator from participating in auto assign workflow, even if he is online.
+4. Option to ignore inactive chat's in auto assign workflow.
+
+execute doc/update_db/update_153.sql for update
+
+2.77v
+
+1. Option in auto responder to choose show proactive invitation on mobile or not.
+2. Chat list filter by Chat wait time and Chat duration interval.
+3. Harden protection against empty visitors messages.
+4. Locking user department table by id to avoid deadlocks in high load situations.
+5. Autologin workflow improvements.
+
+execute doc/update_db/update_152.sql for update
+
+2.76v
+
+1. Option to hide message time from visitor in theme.
+2. Option to set custom mobile width trigger point.
+3. Changed how lh_userdep is table records are updates, avoids deadlocks in high load situations.
+4. Support {department} in send mail to visitor subject and body
+
+execute doc/update_db/update_151.sql for update
+
+2.75v
+
+1. Auto responder improvements and handling phone/tablet users if sync timeouts.
+2. Auto login section to generate static auto login links.
+3. Allow to filter in transfer window by online and logged in statuses.
+4. Survey now supports charts for Questions and Answers. Support for [fs<number>][/fs<number>] and [value=5] support for questions and answers to have fixed answers.
+5. Possibility to import users from CSV files.
+
+execute doc/update_db/update_150.sql for update
+
+2.74v
+
+1. Option to set auto assign workflow priority by time.
+2. Various small changes.
+3. Translations updated.
+
+2.73v
+
+1. Auto responder now have On-Hold functionality.
+1.1 If chat is on hold, no survey redirection will be executed. Usefull if you just want visitor to wait until you find some info.
+
+2.72v
+
+1. Offline requests are stored as chats
+2. To proactive invitation now can be assigned auto responder.
+
+2.71v
+
+1. Option in autoresponder to set visitor redirection to survey if visitor does not respond for n seconds.
+
+execute doc/update_db/update_145.sql for update
+
+2.70v
+
+1. Option to configure what should happen on transfer to department.
+a. Leave assigned user or not
+b. Make chat status pending or not
+c. Remove assigned user or not.
+
+2. Option for operator to configure show alert or not then chat is transferred directly to them.
+3. If chat is transferred to operator and operator opens chat directly from transfer record will be removed also.
+
+execute doc/update_db/update_144.sql for update
+
+2.69.1v
+
+1. Just small extra fix for start chat forms functionality.
+
+No database updates involved.
+
+2.69v
+
+1. Option to overide start chat settings by department. They will be used only if department id is provided in embed code generation.
+2. Encrypted fields support in proactive chat
+
+execute doc/update_db/update_143.sql for update
+
+2.68v
+
+1. Option to style popup window with custom css
+
+execute doc/update_db/update_142.sql for update
+
+2.67v
+
+1. Chat's will track in what state operator was while he was accepting chat. This will be used in Agents statistic.
+2. If widget is closed in one tab it will be closed in another one also.
+
+execute doc/update_db/update_141.sql for update
+
+2.66v
+
+1. Identification was last message seen by visitor or not.
+2. Moving mouse over icon will show time since last sync.
+
+execute doc/update_db/update_140.sql for update
+
+2.65v
+
+1. Autoresponder enhancements. See official announcement for changes.
+
+execute doc/update_db/update_139.sql for update
+
+2.64v
+
+1. Option to setup department offline automaticaly if pending chat's number reaches defined number.
+
+execute doc/update_db/update_138.sql for update
+
+2.63v
+
+1. Invitations now can have events. Tutorial under way.
+
+execute doc/update_db/update_137.sql for update
+
+2.62v
+
+1. UX improvements for chat's between operators
+2. Dynamic proactive events. It's possible to setup proactive invitation based on user iddle time and mouse leaving a screen.
+3. It's possible now to speak and edit text at the same time.
+
+execute doc/update_db/update_136.sql for update
+
+2.61v
+
+1. Workflow improvements for chat between operators
+
+execute doc/update_db/update_135.sql for update
+
+2.60v
+
+1. Possible XSS attack patch by faking HTTP_X_FORWARDED_FOR headers. https://github.com/LiveHelperChat/livehelperchat/commit/eee03f77f3f51fed613c5e306152ea60255edba2
+For quick fix you can just add this line https://github.com/LiveHelperChat/livehelperchat/commit/eee03f77f3f51fed613c5e306152ea60255edba2#diff-530588a4db273d4c39a44978784df71eR20
+2. Various other small UX fixes
+
+No database updates this time.
+
+2.59v
+
+1. During group editing you can choose with what groups members of this group can work with.  That means if operator is assigned to Operators group he will be able to work with only with groups defined in the list or the one he is assigned to.
+
+execute doc/update_db/update_134.sql for update
+
+2.58v
+
+1. Option to track online operators activity so they will go offline automatically if no activity is detected for certain amount of time.
+
+execute doc/update_db/update_133.sql for update
+
+2.57v
+
+1. Canned messages with hashes. Just type # and get suggested canned messages.
+2. In canned messages edit window you can enter tags, tags has to be separated by ","
+
+execute doc/update_db/update_132.sql for update
+
+2.56v
+
+1. REST API for registering mobile devices. Perhaps someone in the future will make open source app etc.
+2. And just various small fixes.
+
+execute doc/update_db/update_131.sql for update
+
+2.55v
+
+1. Device type detection
+2. Option to filter by nick active and pending chats widget
+3. Notifications workflow refactored, just to simplify the code
+4. Issues/Improvements
+https://github.com/LiveHelperChat/livehelperchat/issues/955
+https://github.com/LiveHelperChat/livehelperchat/issues/960
+https://github.com/LiveHelperChat/livehelperchat/issues/967
+https://github.com/LiveHelperChat/livehelperchat/issues/983
+https://github.com/LiveHelperChat/livehelperchat/issues/987
+https://github.com/LiveHelperChat/livehelperchat/pull/979
+5. Accesibility changes according to reports
+6. Animation fixed, once message is send it was not possible to user scroll for some time
+7. Theme adop to mobile devices, widget display and widget status
+8. And many other small fixes.
+
+execute doc/update_db/update_130.sql for update
+
+2.54v
+
+1. If pending chat is assigned to any operator, it's name will be shown.
+2. Reduced font size of lists in right column
+3. New variables for templates content {survey}, {chat_duration}, {waited}, {created}, {user_left}
+4. If chat is automatically closed it will be unmarked as unread
+5. Survey results also will be seen in survey popup which are called in chat window directly.
+
+execute doc/update_db/update_129.sql for update
+
+2.53v
+
+1. Option to transfer chat to another operator directly with !transferforce command
+!transferforce <username | email>
+2. Option to transfer user to survey by choosing survey itself.
+
+execute doc/update_db/update_128.sql for update
+
+2.52v
+
+1. Option to redirect user to survey in the middle of the chat. At the moment it works only in the widget mode. Not full chat mode. Will be updated in the future.
+2. Option to have always open last 10 visitor active chats.
+3. Chat will not scroll to the bottom if visitor scrolls chat at the top and visitors writes a new message.
+
+execute doc/update_db/update_127.sql for update
+
 2.51v
 
 1. Departments groups. Departments groups option will appear in user account under Assigned departments if atleast one department group will be defined.

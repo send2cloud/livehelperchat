@@ -97,6 +97,13 @@
 						<label><?php echo $fields['explain_text']['trans'];?></label>
 						<?php echo erLhcoreClassAbstract::renderInput('explain_text', $fields['explain_text'], $object)?>
 						</div>
+
+						<div class="form-group">
+						<label><?php echo $fields['show_status_delay']['trans'];?></label>
+						<?php echo erLhcoreClassAbstract::renderInput('show_status_delay', $fields['show_status_delay'], $object)?>
+						</div>
+
+						<?php include(erLhcoreClassDesign::designtpl('lhabstract/custom/theme/widget_theme_status.tpl.php'));?>
 						
         		</div>        		
         		<div role="tabpanel" class="tab-pane" id="messagesstyle">
@@ -143,9 +150,12 @@
         		        <label><?php echo $fields['buble_operator_text_color']['trans'];?></label>
     					<?php echo erLhcoreClassAbstract::renderInput('buble_operator_text_color', $fields['buble_operator_text_color'], $object)?>		
     				    </div>
-    				   
-					    
-        		</div>        		
+
+        		        <div class="form-group">
+        		            <label><?php echo erLhcoreClassAbstract::renderInput('hide_ts', $fields['hide_ts'], $object)?> <?php echo $fields['hide_ts']['trans'];?></label>
+    				    </div>
+
+        		</div>
         		<div role="tabpanel" class="tab-pane" id="widgetcontainer">
         		
         		        <div class="form-group">
@@ -173,10 +183,12 @@
 						<?php echo erLhcoreClassAbstract::renderInput('header_padding', $fields['header_padding'], $object)?>		
 						</div>
 						
+						<?php /*
 						<div class="form-group">							
 						<label><?php echo $fields['copyright_image']['trans'];?></label>
 						<?php echo erLhcoreClassAbstract::renderInput('copyright_image', $fields['copyright_image'], $object)?>
 						</div>
+						*/ ?>
 						
 						<div class="form-group">	
 						<label><?php echo $fields['minimize_image']['trans'];?></label>
@@ -196,6 +208,11 @@
 						<div class="form-group">	
 						<label><?php echo $fields['popup_image']['trans'];?></label>
 						<?php echo erLhcoreClassAbstract::renderInput('popup_image', $fields['popup_image'], $object)?>
+						</div>
+
+						<div class="form-group">
+						<label><?php echo $fields['widget_response_width']['trans'];?></label>
+						<?php echo erLhcoreClassAbstract::renderInput('widget_response_width', $fields['widget_response_width'], $object)?>
 						</div>
 						
 						<div class="form-group">	
@@ -220,6 +237,11 @@
         		        <div class="form-group">
         		        <label><?php echo $fields['show_need_help_timeout']['trans'];?></label>
 						<?php echo erLhcoreClassAbstract::renderInput('show_need_help_timeout', $fields['show_need_help_timeout'], $object)?>
+						</div>
+
+        		        <div class="form-group">
+        		        <label><?php echo $fields['show_need_help_delay']['trans'];?></label>
+						<?php echo erLhcoreClassAbstract::renderInput('show_need_help_delay', $fields['show_need_help_delay'], $object)?>
 						</div>
 
         		        <div class="form-group">
@@ -331,6 +353,11 @@
 						<div class="form-group">										
 						<label><?php echo $fields['custom_widget_css']['trans'];?></label>
 						<?php echo erLhcoreClassAbstract::renderInput('custom_widget_css', $fields['custom_widget_css'], $object)?>	
+						</div>	
+						
+						<div class="form-group">										
+						<label><?php echo $fields['custom_popup_css']['trans'];?></label>
+						<?php echo erLhcoreClassAbstract::renderInput('custom_popup_css', $fields['custom_popup_css'], $object)?>	
 						</div>	
 						
         		</div>

@@ -30,10 +30,44 @@ class erLhcoreClassRestAPIHandler
         }
     }
 
+    public static function getRequestMethod()
+    {
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] != '') {
+            return $_SERVER['REQUEST_METHOD'];
+        }
+
+        return false;
+    }
+
+    public static function setHeaders()
+    {
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, API-Key, Authorization');
+        header('Content-Type: application/json');
+        self::setOptionHeaders();
+    }
+
+    public static function setOptionHeaders(){
+        if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+
+            if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD']))
+                // may also be using PUT, PATCH, HEAD etc
+                header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+
+            if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']))
+                header("Access-Control-Allow-Headers: {$_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']}");
+
+            exit(0);
+        }
+    }
+
     public static function validateRequest()
     {
+        self::setHeaders();
+
         $headers = self::getHeaders();
-        
+
         if (isset($headers['Authorization'])) {
             
             $dataAuthorisation = explode(' ', $headers['Authorization']);
@@ -63,12 +97,9 @@ class erLhcoreClassRestAPIHandler
             self::$apiKey = $apiKey;
             
             if (isset($_GET['update_activity'])) {
-                $db = ezcDbInstance::get();
-                $stmt = $db->prepare('UPDATE lh_userdep SET last_activity = :last_activity WHERE user_id = :user_id');
-                $stmt->bindValue(':last_activity', time(), PDO::PARAM_INT);
-                $stmt->bindValue(':user_id', self::$apiKey->user->id, PDO::PARAM_INT);
-                $stmt->execute();
+                erLhcoreClassUserDep::updateLastActivityByUser(self::$apiKey->user->id, time());
             }
+
         } else {
             throw new Exception(erTranslationClassLhTranslation::getInstance()->getTranslation('lhrestapi/validation', 'Authorization header is missing!'));
         }
@@ -133,11 +164,31 @@ class erLhcoreClassRestAPIHandler
                     'validator' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'int', array(
                         'min_range' => 1
                     ))
+                ),
+                'limit' => array(
+                    'type' => 'general',
+                    'field' => 'limit',
+                    'validator' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'int', array(
+                        'min_range' => 1
+                    ))
+                ),
+                'offset' => array(
+                    'type' => 'general',
+                    'field' => 'offset',
+                    'validator' => new ezcInputFormDefinitionElement(ezcInputFormDefinitionElement::OPTIONAL, 'int', array(
+                        'min_range' => 1
+                    ))
                 )
             )
         );
         
+        $filterlt = array('id');
+        
         $filter = self::formatFilter($validAttributes);
+        
+        if (isset($_GET['filtergt']['id']) && is_numeric($_GET['filtergt']['id'])){
+            $filter['filtergt']['id'] = (int)$_GET['filtergt']['id'];
+        }
         
         $limitation = self::getLimitation();
         
@@ -148,12 +199,10 @@ class erLhcoreClassRestAPIHandler
                 'list_count' => 0
             );
         }
-        
-        
+                
         if ($limitation !== true) {
             $filter['customfilter'][] = $limitation;
         }
-        
         
         // Get chats list
         $chats = erLhcoreClassChat::getList($filter);
@@ -260,17 +309,97 @@ class erLhcoreClassRestAPIHandler
     }
 
     /**
+     * php array to xml conversion even for nested data
+     *
+     * @link http://stackoverflow.com/q/14136714/367456
+     * @see http://stackoverflow.com/a/14143759/367456 for description
+     * @author hakre <http://hakre.wordpress.com/credits>
+     */
+    public static function formatXML($data)
+    {
+        $createArrayImporter = function (SimpleXMLElement $subject) {
+            $add = function (SimpleXMLElement $subject, $key, $value) use (&$add) {
+                
+                $addChildCdata = function ($name, $value = NULL, & $parent) {
+                    $new_child = $parent->addChild($name);
+                
+                    if ($new_child !== NULL) {
+                        $node = dom_import_simplexml($new_child);
+                        $no   = $node->ownerDocument;
+                        $node->appendChild($no->createCDATASection($value));
+                    }
+                
+                    return $new_child;
+                };
+                
+                $hasKey    = is_string($key);
+                $isString  = is_string($value) || is_numeric($value);
+                $isArray   = is_array($value);
+                $count     = count($value);
+                $isIndexed = $isArray && $count > 1 && array_keys($value) === range(0, $count - 1);
+                $isKeyed   = $isArray && $count && !$isIndexed;
+                switch (true) {
+                    case $isString && $hasKey:
+                                                
+                        if (is_numeric($value) || empty($value)) {
+                            return $subject->addChild($key, $value);
+                        } else {
+                            return $addChildCdata($key, $value, $subject);
+                        }
+                        
+                    case $isIndexed && $hasKey:
+                        foreach ($value as $oneof_value) {
+                            $add($subject, $key, $oneof_value);
+                        }
+                        return $subject->$key;
+                    case $isKeyed && $hasKey:
+                        $subject = $subject->addChild($key);
+                        // fall-through intended
+                    case $isKeyed:
+                        foreach ($value as $oneof_key => $oneof_value) {
+                            $add($subject, $oneof_key, $oneof_value);
+                        }
+                        return true;
+                    default:
+                        //trigger_error('Unknown Nodetype ' . $key .print_r($value, 1));
+                }
+            };
+            return function (Array $array) use ($subject, $add) {
+                $add($subject, null, $array);
+                return $subject;
+            };
+        };
+        
+        $xml      = new SimpleXMLElement('<root/>');
+        $importer = $createArrayImporter($xml);
+        
+        $SimpleXML = $importer($data);
+        
+        $dom                     = new DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput       = true;
+        $dom->loadXML($SimpleXML->asXML());
+        
+        return $dom->saveXML();
+    }
+    
+    /**
      *
      * @param array $data            
      */
-    public static function outputResponse($data)
+    public static function outputResponse($data, $format = null)
     {
-        $json = json_encode($data, JSON_PRETTY_PRINT);
-        
-        if (isset($_GET['callback'])) {
-            echo $_GET['callback'] . '(' . $json . ')';
+        if ((isset($_GET['format']) && $_GET['format'] == 'xml') || $format === 'xml') {
+           echo self::formatXML(json_decode(json_encode($data),true));
         } else {
-            echo $json;
+        
+            $json = json_encode($data, JSON_PRETTY_PRINT);
+            
+            if (isset($_GET['callback'])) {
+                echo $_GET['callback'] . '(' . $json . ')';
+            } else {
+                echo $json;
+            }
         }
     }
 

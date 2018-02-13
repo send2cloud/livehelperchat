@@ -9,6 +9,16 @@
 
 class erLhAbstractModelSurvey {
 
+    use erLhcoreClassDBTrait;
+    
+    public static $dbTable = 'lh_abstract_survey';
+    
+    public static $dbTableId = 'id';
+    
+    public static $dbSessionHandler = 'erLhcoreClassAbstract::getSession';
+    
+    public static $dbSortOrder = 'ASC';
+        
 	public function getState()
 	{
 		$stateArray = array (
@@ -98,18 +108,12 @@ class erLhAbstractModelSurvey {
 			'question_plain_5'         => $this->question_plain_5,
 			'question_plain_5_pos'     => $this->question_plain_5_pos,
 			'question_plain_5_enabled' => $this->question_plain_5_enabled,
-			'question_plain_5_req'     => $this->question_plain_5_req
+			'question_plain_5_req'     => $this->question_plain_5_req,
+		    
+			'feedback_text'            => $this->feedback_text
 		);
 
 		return $stateArray;
-	}
-
-	public function setState( array $properties )
-	{
-		foreach ( $properties as $key => $val )
-		{
-			$this->$key = $val;
-		}
 	}
 
 	public function __toString()
@@ -132,32 +136,7 @@ class erLhAbstractModelSurvey {
 	    
 		return $metaData;
 	}
-
-	public static function getCount($params = array())
-	{
-		$session = erLhcoreClassAbstract::getSession();
-		$q = $session->database->createSelectQuery();
-		$q->select( "COUNT(id)" )->from( "lh_abstract_survey" );
-
-		if (isset($params['filter']) && count($params['filter']) > 0)
-		{
-	   		$conditions = array();
-
-		   	foreach ($params['filter'] as $field => $fieldValue)
-		   	{
-		    	$conditions[] = $q->expr->eq( $field, $fieldValue );
-		   	}
-
-	   		$q->where( $conditions );
-		}
-
-		$stmt = $q->prepare();
-		$stmt->execute();
-		$result = $stmt->fetchColumn();
-
-		return $result;
-	}
-
+	
 	public function __get($var)
 	{
 	   switch ($var) {
@@ -174,8 +153,16 @@ class erLhAbstractModelSurvey {
 	   			   $field = str_replace('_front', '', $var);
 	   			   $items = explode('||==========||', $this->{$field});
 
-	   			   foreach ($items as $item) {
-	   			   		$this->{$var}[] = array('option' => $item);
+	   			   foreach ($items as $index => $item) {
+
+                        $matches = array();
+                        preg_match('/\[value=(.*?)\]/', $item, $matches);
+
+                        if (isset($matches[1]) && is_numeric($matches[1])){
+                            $index = (int)$matches[1];
+                        }
+
+	   			   		$this->{$var}[$index] = array('option' => $item);
 	   			   }
 	   			   
 	   		   return $this->{$var};
@@ -187,20 +174,7 @@ class erLhAbstractModelSurvey {
 	   }
 	}
 
-	public static function fetch($id)
-	{
-		if (isset($GLOBALS['erLhAbstractModelSurvey_'.$id])) return $GLOBALS['erLhAbstractModelSurvey_'.$id];
-
-		try {
-			$GLOBALS['erLhAbstractModelSurvey_'.$id] = erLhcoreClassAbstract::getSession()->load( 'erLhAbstractModelSurvey', (int)$id );
-		} catch (Exception $e) {
-			$GLOBALS['erLhAbstractModelSurvey_'.$id] = false;
-		}
-
-		return $GLOBALS['erLhAbstractModelSurvey_'.$id];
-	}
-
-	public function removeThis()
+	public function beforeRemove()
 	{
 	    $q = ezcDbInstance::get()->createDeleteQuery();
 	    
@@ -208,70 +182,43 @@ class erLhAbstractModelSurvey {
 	    $q->deleteFrom( 'lh_abstract_survey_item' )->where( $q->expr->eq( 'survey_id', $this->id ) );
 	    $stmt = $q->prepare();
 	    $stmt->execute();
-	    
-		erLhcoreClassAbstract::getSession()->delete($this);
 	}
 
-	public static function getList($paramsSearch = array())
-   	{
-       	$paramsDefault = array('limit' => 500, 'offset' => 0);
+	public function getStarsNumberVotes($id, $stars, $filter = array())
+	{
+	    $filterDefault = array('filterin' => array('max_stars_' . $id => $stars), 'filter' => array( 'survey_id' => $this->id));
 
-       	$params = array_merge($paramsDefault,$paramsSearch);
+        $filterDefault = array_replace_recursive($filter, $filterDefault);
 
-       	$session = erLhcoreClassAbstract::getSession();
-
-       	$q = $session->createFindQuery( 'erLhAbstractModelSurvey' );
-
-		$conditions = array();
-
-		if (isset($params['filter']) && count($params['filter']) > 0)
-		{
-			foreach ($params['filter'] as $field => $fieldValue)
-			{
-				$conditions[] = $q->expr->eq( $field, $fieldValue );
-			}
-		}
-
-		if (isset($params['filterin']) && count($params['filterin']) > 0)
-		{
-			foreach ($params['filterin'] as $field => $fieldValue)
-			{
-				$conditions[] = $q->expr->in( $field, $fieldValue );
-			}
-		}
-
-		if (isset($params['filterlt']) && count($params['filterlt']) > 0)
-		{
-			foreach ($params['filterlt'] as $field => $fieldValue)
-			{
-				$conditions[] = $q->expr->lt( $field, $fieldValue );
-			}
-		}
-
-		if (isset($params['filtergt']) && count($params['filtergt']) > 0)
-		{
-			foreach ($params['filtergt'] as $field => $fieldValue)
-			{
-				$conditions[] = $q->expr->gt( $field, $fieldValue );
-			}
-		}
-
-		if (count($conditions) > 0)
-		{
-			$q->where( $conditions );
-		}
-
-      	$q->limit($params['limit'],$params['offset']);
-
-      	$q->orderBy(isset($params['sort']) ? $params['sort'] : 'id ASC' );
-
-       	$objects = $session->find( $q );
-
-    	return $objects;
+	    return erLhAbstractModelSurveyItem::getCount($filterDefault);
 	}
 
-	public function updateThis() {
-		erLhcoreClassAbstract::getSession()->update($this);
+	public function getStarsNumberVotesTotal($id)
+	{
+	    return erLhAbstractModelSurveyItem::getCount(array('filtergt' => array('max_stars_' . $id => 0),'filter' => array( 'survey_id' => $this->id)));
+	}
+
+	public function getQuestionsOptionsVotesTotal($id)
+    {
+        return erLhAbstractModelSurveyItem::getCount(array('filtergt' => array('question_options_' . $id => 0),'filter' => array( 'survey_id' => $this->id)));
+    }
+
+    public function getQuestionsNumberVotes($id, $value, $filter = array())
+    {
+        $filterDefault = array('filterin' => array('question_options_' . $id => $value),'filter' => array( 'survey_id' => $this->id));
+
+        $filterDefault = array_replace_recursive($filter, $filterDefault);
+
+        return erLhAbstractModelSurveyItem::getCount($filterDefault);
+    }
+
+	public function getStarsNumberAverage($id, $filter = array())
+	{
+        $filterDefault = array('filtergt' => array('max_stars_' . $id => 0),'filter' => array( 'survey_id' => $this->id));
+
+        $filterDefault = array_replace_recursive($filter, $filterDefault);
+
+	    return erLhAbstractModelSurveyItem::getCount($filterDefault, 'AVG', 'max_stars_' . $id);
 	}
 
 	public function customForm() {
@@ -364,6 +311,8 @@ class erLhAbstractModelSurvey {
 	public $question_plain_5_pos = 0;
 	public $question_plain_5_enabled = 0;
 	public $question_plain_5_req = 0;
+	
+	public $feedback_text = '';
 	
 	public $hide_add = false;
 	public $hide_delete = false;

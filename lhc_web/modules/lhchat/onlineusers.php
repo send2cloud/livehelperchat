@@ -25,7 +25,8 @@ if (is_numeric($Params['user_parameters_unordered']['deletevisitor']) && $Params
 		$visitor = erLhcoreClassModelChatOnlineUser::fetch($Params['user_parameters_unordered']['deletevisitor']);
 		$visitor->removeThis();
 	} catch (Exception $e) {
-
+        print_r($e);
+        exit;
 	}
 
     erLhcoreClassModule::redirect('chat/onlineusers');
@@ -55,6 +56,7 @@ if ($userDepartments !== true){
 }
 
 if ($is_ajax == true) {
+    header('content-type: application/json; charset=utf-8');
 	$items = erLhcoreClassModelChatOnlineUser::getList($filter);
 	
 	erLhcoreClassChat::$trackActivity = (int)erLhcoreClassModelChatConfig::fetchCache('track_activity')->current_value == 1;

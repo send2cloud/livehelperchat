@@ -1,10 +1,16 @@
 <?php
-
+header ( 'content-type: application/json; charset=utf-8' );
 $filter = array('offset' => 0, 'limit' => (int)$Params['user_parameters_unordered']['maxrows'],'sort' => 'last_visit DESC');
 
 $department = isset($Params['user_parameters_unordered']['department']) && is_numeric($Params['user_parameters_unordered']['department']) ? (int)$Params['user_parameters_unordered']['department'] : false;
 if ($department !== false){
 	$filter['filter']['dep_id'] = $department;
+}
+
+$timeout = (int)$Params['user_parameters_unordered']['timeout'];
+
+if ($timeout > 0) {
+	$filter['filtergt']['last_visit'] = (time()-$timeout);
 }
 
 /**
@@ -34,6 +40,6 @@ foreach ($items as $item) {
 			}
 }
 
-echo json_encode(array('result' => $returnItems));
+echo erLhcoreClassChat::safe_json_encode(array('result' => $returnItems));
 
 exit();

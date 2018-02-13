@@ -6,6 +6,7 @@ $ViewList = array();
 
 $ViewList['departments'] = array(
     'params' => array(),
+    'uparams' => array('visible_if_online','hidden','disabled','name'),
     'functions' => array( 'list' )
     );
 
@@ -29,8 +30,23 @@ $ViewList['group'] = array(
     'functions' => array( 'managegroups' )
 );
 
+$ViewList['limitgroup'] = array(
+    'params' => array(),
+    'functions' => array( 'managegroups' )
+);
+
 $ViewList['newgroup'] = array(
     'params' => array(),
+    'functions' => array( 'managegroups' )
+);
+
+$ViewList['newlimitgroup'] = array(
+    'params' => array(),
+    'functions' => array( 'managegroups' )
+);
+
+$ViewList['editlimitgroup'] = array(
+    'params' => array('id'),
     'functions' => array( 'managegroups' )
 );
 
@@ -40,6 +56,12 @@ $ViewList['editgroup'] = array(
 );
 
 $ViewList['deletegroup'] = array(
+    'params' => array('id'),
+    'uparams' => array('csfr'),
+    'functions' => array( 'managegroups' )
+);
+
+$ViewList['deletelimitgroup'] = array(
     'params' => array('id'),
     'uparams' => array('csfr'),
     'functions' => array( 'managegroups' )

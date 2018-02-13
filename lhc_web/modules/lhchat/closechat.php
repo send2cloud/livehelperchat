@@ -4,17 +4,21 @@
 $currentUser = erLhcoreClassUser::instance();
 $currentUser->getUserID();
 
-$chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $Params['user_parameters']['chat_id']);
+if (!$currentUser->validateCSFRToken($Params['user_parameters_unordered']['csfr'])) {
+    die('Invalid CSRF Token');
+    exit;
+}
+
+$db = ezcDbInstance::get();
+$db->beginTransaction();
+
+$chat = erLhcoreClassModelChat::fetchAndLock($Params['user_parameters']['chat_id']);
+
+erLhcoreClassChat::lockDepartment($chat->dep_id, $db);
 
 // Chat can be closed only by owner
-if ($chat->user_id == $currentUser->getUserID() || $currentUser->hasAccessTo('lhchat','allowcloseremote'))
+if (($chat->user_id == $currentUser->getUserID() || $currentUser->hasAccessTo('lhchat','allowcloseremote')) && erLhcoreClassChat::hasAccessToWrite($chat))
 {
-
-	if (!$currentUser->validateCSFRToken($Params['user_parameters_unordered']['csfr'])) {
-		die('Invalid CSRF Token');
-		exit;
-	}
-	
 	$userData = $currentUser->getUserData(true);
 	
 	erLhcoreClassChatHelper::closeChat(array(
@@ -23,7 +27,7 @@ if ($chat->user_id == $currentUser->getUserID() || $currentUser->hasAccessTo('lh
 	));
 }
 
-CSCacheAPC::getMem()->removeFromArray('lhc_open_chats', (int)$Params['user_parameters']['chat_id']);
+$db->commit();
 
 header('Location: ' . $_SERVER['HTTP_REFERER']);
 exit;

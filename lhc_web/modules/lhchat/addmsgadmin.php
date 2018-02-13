@@ -1,5 +1,5 @@
 <?php
-
+header ( 'content-type: application/json; charset=utf-8' );
 $definition = array(
         'msg' => new ezcInputFormDefinitionElement(
             ezcInputFormDefinitionElement::REQUIRED, 'unsafe_raw'
@@ -22,7 +22,7 @@ if (trim($form->msg) != '')
 	        $currentUser = erLhcoreClassUser::instance();
 	
 	        if (!isset($_SERVER['HTTP_X_CSRFTOKEN']) || !$currentUser->validateCSFRToken($_SERVER['HTTP_X_CSRFTOKEN'])) {
-	        	echo json_encode(array('error' => 'true', 'result' => 'Invalid CSRF Token' ));
+	        	echo erLhcoreClassChat::safe_json_encode(array('error' => 'true', 'result' => 'Invalid CSRF Token' ));
 	        	$db->rollback();
 	        	exit;
 	        }
@@ -33,12 +33,16 @@ if (trim($form->msg) != '')
 	        $msgText = trim($form->msg);
 	        $ignoreMessage = false;
 	        $returnBody = '';
-	        
+	        $customArgs = array();
+
 	        if (strpos($msgText, '!') === 0) {
 	            $statusCommand = erLhcoreClassChatCommand::processCommand(array('user' => $userData, 'msg' => $msgText, 'chat' => & $Chat));
 	            if ($statusCommand['processed'] === true) {
 	                $messageUserId = -1; // Message was processed set as internal message
-	                $msgText = trim('[b]'.$userData->name_support.'[/b]: '.$msgText .' '. ($statusCommand['process_status'] != '' ? '|| '.$statusCommand['process_status'] : ''));
+	                
+	                $rawMessage = !isset($statusCommand['raw_message']) ? $msgText : $statusCommand['raw_message'];
+	                
+	                $msgText = trim('[b]'.$userData->name_support.'[/b]: '.$rawMessage .' '. ($statusCommand['process_status'] != '' ? '|| '.$statusCommand['process_status'] : ''));
 	                
 	                if (isset($statusCommand['ignore']) && $statusCommand['ignore'] == true) {
 	                    $ignoreMessage = true;
@@ -49,6 +53,10 @@ if (trim($form->msg) != '')
 	                    $tpl->set('msg',array('msg' =>  $statusCommand['info'], 'time' => time()));
 	                    $returnBody = $tpl->fetch();
 	                }
+
+                    if (isset($statusCommand['custom_args'])) {
+                        $customArgs = $statusCommand['custom_args'];
+                    }
 	            };
 	        }
 	        
@@ -70,8 +78,30 @@ if (trim($form->msg) != '')
     	
     	        // Set last message ID
     	        if ($Chat->last_msg_id < $msg->id) {
-    	        	
-    	        	$stmt = $db->prepare('UPDATE lh_chat SET status = :status, user_status = :user_status, last_msg_id = :last_msg_id, last_op_msg_time = :last_op_msg_time, has_unread_op_messages = :has_unread_op_messages, unread_op_messages_informed = :unread_op_messages_informed WHERE id = :id');
+
+    	            $statusSub = '';
+    	            if ($Chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_ON_HOLD && $messageUserId !== -1) {
+                        $statusSub = ',status_sub = 0, last_user_msg_time = ' . (time() - 1);
+                        $tpl = erLhcoreClassTemplate::getInstance('lhchat/lists/assistance_message.tpl.php');
+                        $tpl->set('msg', array('msg' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/adminchat', 'Hold removed!'), 'time' => time()));
+                        $returnBody .= $tpl->fetch();
+                        $customArgs['hold_removed'] = true;
+
+                        if ($Chat->auto_responder !== false) {
+                            $Chat->auto_responder->active_send_status = 0;
+                            $Chat->auto_responder->saveThis();
+                        }
+                    }
+
+                    // Reset active counter if operator send new message and it's sync request and there was new message from operator
+                    if ($Chat->status_sub != erLhcoreClassModelChat::STATUS_SUB_ON_HOLD && $Chat->auto_responder !== false) {
+    	                if ($Chat->auto_responder->active_send_status != 0) {
+                            $Chat->auto_responder->active_send_status = 0;
+                            $Chat->auto_responder->saveThis();
+    	                }
+                    }
+
+    	        	$stmt = $db->prepare('UPDATE lh_chat SET status = :status, user_status = :user_status, last_msg_id = :last_msg_id, last_op_msg_time = :last_op_msg_time, has_unread_op_messages = :has_unread_op_messages, unread_op_messages_informed = :unread_op_messages_informed' . $statusSub . ' WHERE id = :id');
     	        	$stmt->bindValue(':id',$Chat->id,PDO::PARAM_INT);
     	        	$stmt->bindValue(':last_msg_id',$msg->id,PDO::PARAM_INT);
     	        	$stmt->bindValue(':last_op_msg_time',time(),PDO::PARAM_INT);
@@ -80,7 +110,8 @@ if (trim($form->msg) != '')
     	        	
     	        	if ($userData->invisible_mode == 0 && $messageUserId > 0) { // Change status only if it's not internal command
     		        	if ($Chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT) {
-    		        		$Chat->status = erLhcoreClassModelChat::STATUS_ACTIVE_CHAT;        		
+    		        		$Chat->status = erLhcoreClassModelChat::STATUS_ACTIVE_CHAT;  
+    		        		$Chat->user_id = $messageUserId;
     		        	}
     	        	}
     	
@@ -98,8 +129,28 @@ if (trim($form->msg) != '')
     	        	$stmt->execute();	        	
     	        }
 	        }
-	              
-	        echo json_encode(array('error' => 'false','r' => $returnBody));
+
+	        if ($Chat->status == erLhcoreClassModelChat::STATUS_OPERATORS_CHAT) {
+	            
+	            $transfer = erLhcoreClassModelTransfer::findOne(array('filter' => array('transfer_user_id' => $currentUser->getUserID(), 'transfer_to_user_id' => ($Chat->user_id == $currentUser->getUserID() ? $Chat->sender_user_id : $Chat->user_id))));
+	            
+	            if ($transfer === false) {
+    	            $transfer = new erLhcoreClassModelTransfer();
+    	            
+    	            $transfer->chat_id = $Chat->id;
+    	            
+    	            $transfer->from_dep_id = $Chat->dep_id;
+    	            
+    	            // User which is transfering
+    	            $transfer->transfer_user_id = $currentUser->getUserID();
+    	            
+    	            // To what user
+    	            $transfer->transfer_to_user_id = $Chat->user_id == $currentUser->getUserID() ? $Chat->sender_user_id : $Chat->user_id;
+    	            $transfer->saveThis();
+	            }
+	        }
+	        
+	        echo erLhcoreClassChat::safe_json_encode(array('error' => 'false','r' => $returnBody)+ $customArgs);
 	        
 	        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.web_add_msg_admin',array('msg' => & $msg,'chat' => & $Chat));
 	    }   
@@ -111,7 +162,7 @@ if (trim($form->msg) != '')
     }
 
 } else {
-    echo json_encode(array('error' => 'true'));
+    echo erLhcoreClassChat::safe_json_encode(array('error' => 'true'));
 }
 
 

@@ -271,14 +271,14 @@ class erLhcoreClassUser{
 	       $q->deleteFrom( 'lh_users_remember' )->where( $q->expr->eq( 'user_id', $q->bindValue($this->userid) ) );
 	       $stmt = $q->prepare();
 	       $stmt->execute();
-	       
-	       $db = ezcDbInstance::get();
-	       $db->query('UPDATE lh_userdep SET last_activity = 0 WHERE user_id = '.$this->userid);
+
+           erLhcoreClassUserDep::updateLastActivityByUser($this->userid, 0);
        }
        
        $this->session->destroy();
        
        session_regenerate_id(true);
+       session_destroy();
    }
 
    public static function getSession()
@@ -324,13 +324,50 @@ class erLhcoreClassUser{
 
    function updateLastVisit()
    {
-       $db = ezcDbInstance::get();       
-       $stmt = $db->prepare('UPDATE lh_userdep SET last_activity = :last_activity WHERE user_id = :user_id');
-       $stmt->bindValue(':last_activity',time(),PDO::PARAM_INT);
-       $stmt->bindValue(':user_id',$this->userid,PDO::PARAM_INT);
-       $stmt->execute();       
+       // Because of how user departments table is locked sometimes we have lock deadlines. We need refactor or remove locking for user departments tables.
+       try {
+             $db = ezcDbInstance::get();
+             $db->beginTransaction();
+
+             erLhcoreClassUserDep::updateLastActivityByUser($this->userid, time());
+
+             if ((!isset($_SESSION['lhc_online_session'])) || (isset($_SESSION['lhc_online_session']) && (time() - $_SESSION['lhc_online_session'] > 20))) {
+
+                 $userData = $this->getUserData(true);
+
+                 if ($userData->hide_online == 0)
+                 {
+                     $stmt = $db->prepare("SELECT id FROM lh_users_online_session WHERE user_id = :user_id AND lactivity > :lactivity_back");
+                     $stmt->bindValue(':user_id',$this->userid,PDO::PARAM_INT);
+                     $stmt->bindValue(':lactivity_back',time()-40,PDO::PARAM_INT);
+                     $stmt->execute();
+                     $id = $stmt->fetch(PDO::FETCH_COLUMN);
+
+                     if (is_numeric($id)) {
+                         $stmt = $db->prepare('UPDATE lh_users_online_session SET lactivity = :lactivity, duration = :lactivity_two - time WHERE id = :id');
+                         $stmt->bindValue(':id',$id,PDO::PARAM_INT);
+                         $stmt->bindValue(':lactivity_two',time(),PDO::PARAM_INT);
+                         $stmt->bindValue(':lactivity',time(),PDO::PARAM_INT);
+                         $stmt->execute();
+                     } else {
+                         $stmt = $db->prepare('INSERT INTO lh_users_online_session SET time = :time, lactivity = :lactivity, duration = 0, user_id = :user_id');
+                         $stmt->bindValue(':lactivity',time(),PDO::PARAM_INT);
+                         $stmt->bindValue(':time',time(),PDO::PARAM_INT);
+                         $stmt->bindValue(':user_id',$this->userid,PDO::PARAM_INT);
+                         $stmt->execute();
+                     }
+                 }
+
+                 $_SESSION['lhc_online_session'] = time();
+             }
+
+             $db->commit();
+        } catch (Exception $e) {
+           //print_r($e);
+             // @todo fix me
+        }
    }
-   
+
    function getUserList()
    {
      $db = ezcDbInstance::get();
@@ -342,14 +379,22 @@ class erLhcoreClassUser{
      return $rows;
    }
 
-   function hasAccessTo($module, $functions)
+   function hasAccessTo($module, $functions, $returnLimitation = false)
    {
        $AccessArray = $this->accessArray();
 
        // Global rights
        if (isset($AccessArray['*']['*']) || isset($AccessArray[$module]['*']))
        {
-           return true;
+           if ($returnLimitation === false) {
+               return true;
+           } elseif ($AccessArray[$module]['*'] && !is_bool($AccessArray[$module]['*'])) {
+               return $AccessArray[$module]['*'];
+           } elseif ($AccessArray['*']['*'] && !is_bool($AccessArray['*']['*'])) {
+               return $AccessArray['*']['*'];
+           } else {
+               return true;
+           }
        }
 
        // Provided rights have to be set
@@ -360,8 +405,13 @@ class erLhcoreClassUser{
                // Missing one of provided right
                if (!isset($AccessArray[$module][$function])) return false;
            }
+
        } else {
-           if (!isset($AccessArray[$module][$functions])) return false;
+           if (!isset($AccessArray[$module][$functions])) {
+               return false;
+           } elseif (isset($AccessArray[$module][$functions]) && $returnLimitation === true && !is_bool($AccessArray[$module][$functions])) {
+               return $AccessArray[$module][$functions];
+           }
        }
 
        return true;

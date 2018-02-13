@@ -74,6 +74,14 @@ class erLhcoreClassModelChatOnlineUser
         $q->deleteFrom('lh_chat_online_user_footprint')->where($q->expr->eq('chat_id', 0), $q->expr->eq('online_user_id', $this->id));
         $stmt = $q->prepare();
         $stmt->execute();
+        
+        
+        $q = ezcDbInstance::get()->createDeleteQuery();
+        
+        // Delete realted events
+        $q->deleteFrom('lh_abstract_proactive_chat_event')->where( $q->expr->eq('vid_id', $this->id));
+        $stmt = $q->prepare();
+        $stmt->execute();
 
         erLhcoreClassChat::getSession()->delete($this);
     }
@@ -534,27 +542,84 @@ class erLhcoreClassModelChatOnlineUser
         }
     }
 
-    public static function cleanupOnlineUsers()
+    public static function cleanupOnlineUsers($params = array())
     {
+        $cleanupCronjob = erLhcoreClassModelChatConfig::fetch('cleanup_cronjob')->current_value;
+
+        if ($cleanupCronjob == 0 || (isset($params['cronjob']) && $params['cronjob'] == 1))
+        {
+            $lastCleanup = erLhcoreClassModelChatConfig::fetch('tracked_users_cleanup_last');
+
+            // Do not clean more often that once per hour
+            if ((int)$lastCleanup->current_value < time()-3600) {
+
+                $timeoutCleanup = erLhcoreClassModelChatConfig::fetch('tracked_users_cleanup')->current_value;
+
+                $timeoutCleanupFootprint = erLhcoreClassModelChatConfig::fetch('tracked_footprint_cleanup')->current_value;
+
+                $lastCleanup->identifier = 'tracked_users_cleanup_last';
+                $lastCleanup->type = 0;
+                $lastCleanup->explain = 'Track last cleanup';
+                $lastCleanup->hidden = 1;
+                $lastCleanup->value = time();
+                $lastCleanup->saveThis();
+
+                $db = ezcDbInstance::get();
+
+                if ($timeoutCleanup > 0) {
+                    // Proactive events cleanup
+                    $stmt = $db->prepare('DELETE T2 FROM lh_abstract_proactive_chat_event as T2 INNER JOIN lh_chat_online_user as T1 ON T1.id = T2.vid_id WHERE last_visit < :last_visit');
+                    $stmt->bindValue(':last_visit', (int)(time() - ($timeoutCleanup * 24 * 3600)), PDO::PARAM_INT);
+                    $stmt->execute();
+
+                    // Online user cleanup
+                    $stmt = $db->prepare('DELETE FROM lh_chat_online_user WHERE last_visit < :last_activity');
+                    $stmt->bindValue(':last_activity', (int)(time() - ($timeoutCleanup * 24 * 3600)), PDO::PARAM_INT);
+                    $stmt->execute();
+                }
+
+                if ($timeoutCleanupFootprint > 0) {
+                    self::cleanupFootprint($timeoutCleanupFootprint);
+                }
+            }
+        }
+    }
+
+    /**
+     * @desc refactor footprint cleanup so it will use indexes all the time
+     *
+     * @param $timeout
+     * @throws ezcDbHandlerNotFoundException
+     */
+    public static function cleanupFootprint($timeout) {
         $db = ezcDbInstance::get();
 
-        $timeoutCleanup = erLhcoreClassModelChatConfig::fetch('tracked_users_cleanup')->current_value;
+        for ($i = 0; $i < 100; $i++)
+        {
+            $stmt = $db->prepare("SELECT id, vtime FROM lh_chat_online_user_footprint ORDER BY id ASC LIMIT 1 OFFSET 1000");
+            $stmt->execute();
+            $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $db->prepare('DELETE FROM lh_chat_online_user WHERE last_visit < :last_activity');
-        $stmt->bindValue(':last_activity', (int)(time() - $timeoutCleanup * 24 * 3600), PDO::PARAM_INT);
-        $stmt->execute();
-
-        $stmt = $db->prepare('DELETE FROM lh_chat_online_user_footprint WHERE chat_id = 0 AND vtime < :last_activity');
-        $stmt->bindValue(':last_activity', (int)(time() - $timeoutCleanup * 24 * 3600), PDO::PARAM_INT);
-        $stmt->execute();
-
+            if (isset($data['vtime']) && $data['vtime'] < (int)(time() - ($timeout * 24 * 3600))) {
+                $stmt = $db->prepare('DELETE FROM lh_chat_online_user_footprint WHERE id < :id');
+                $stmt->bindValue(':id', $data['id'], PDO::PARAM_INT);
+                $stmt->execute();
+            } else {
+                // No more records found to remove
+                break;
+            }
+        }
     }
+
 
     public static function cleanAllRecords()
     {
         $db = ezcDbInstance::get();
 
         $stmt = $db->prepare('DELETE FROM lh_chat_online_user');
+        $stmt->execute();
+
+        $stmt = $db->prepare('DELETE FROM lh_abstract_proactive_chat_event');
         $stmt->execute();
 
         $stmt = $db->prepare('DELETE FROM lh_chat_online_user_footprint WHERE chat_id = 0');
@@ -581,10 +646,14 @@ class erLhcoreClassModelChatOnlineUser
 
         return false;
     }
-
+    
+    public static function getDynamicInvitation($paramsHandle = array())
+    {    
+        return erLhAbstractModelProactiveChatInvitation::processProActiveInvitationDynamic($paramsHandle['online_user'], array('tag' => isset($paramsHandle['tag']) ? $paramsHandle['tag'] : ''));
+    }
+    
     public static function handleRequest($paramsHandle = array())
     {
-
         if (isset($_SERVER['HTTP_USER_AGENT']) && !self::isBot($_SERVER['HTTP_USER_AGENT'])) {
             $newVisitor = false;
 
@@ -628,7 +697,7 @@ class erLhcoreClassModelChatOnlineUser
 
                 } else {
                     $item = new erLhcoreClassModelChatOnlineUser();
-                    $item->ip = erLhcoreClassIPDetect::getIP();
+                    $item->ip = isset($paramsHandle['ip']) ? $paramsHandle['ip'] : erLhcoreClassIPDetect::getIP();
                     $item->vid = $paramsHandle['vid'];
                     $item->identifier = (isset($paramsHandle['identifier']) && !empty($paramsHandle['identifier'])) ? $paramsHandle['identifier'] : '';
                     $item->referrer = isset($_GET['r']) ? rawurldecode($_GET['r']) : '';
@@ -660,7 +729,20 @@ class erLhcoreClassModelChatOnlineUser
                 self::cleanupOnlineUsers();
                 return false;
             }
-
+            
+            $ip = isset($paramsHandle['ip']) ? $paramsHandle['ip'] : erLhcoreClassIPDetect::getIP();
+            
+            if ($item->ip != $ip) {
+                $item->ip = $ip;
+                self::detectLocation($item);
+                $item->store_chat = true;
+            }
+            
+            if (isset($_POST['onattr']) && !empty($_POST['onattr']) && $item->online_attr != $_POST['onattr']) {
+            	$item->online_attr = $_POST['onattr'];
+            	$item->store_chat = true;
+            }
+            	
             if (isset($paramsHandle['pages_count']) && $paramsHandle['pages_count'] == true) {
                 $item->pages_count++;
                 $item->tt_pages_count++;
@@ -692,9 +774,9 @@ class erLhcoreClassModelChatOnlineUser
 
             // Update variables only if it's not JS to check for operator message
             if (!isset($paramsHandle['check_message_operator']) || (isset($paramsHandle['pages_count']) && $paramsHandle['pages_count'] == true)) {
-                $item->user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
-                $item->current_page = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
-                $item->page_title = isset($_GET['dt']) ? (string)rawurldecode($_GET['dt']) : '';
+                $item->user_agent = isset($_POST['ua']) ? $_POST['ua'] : (isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '');
+                $item->current_page = isset($_POST['l']) ? $_POST['l'] : (isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '');
+                $item->page_title = isset($_POST['dt']) ? $_POST['dt'] : (isset($_GET['dt']) ? (string)rawurldecode($_GET['dt']) : '');
                 $item->last_visit = time();
                 $item->store_chat = true;
                 $logPageView = true;
@@ -741,6 +823,7 @@ class erLhcoreClassModelChatOnlineUser
 
             return $item;
         } else {
+            // throw new Exception('Invalid HTTP_USER_AGENT!');
             // Stop execution on google bot
             exit;
         }

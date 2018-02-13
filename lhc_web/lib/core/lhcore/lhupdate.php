@@ -2,14 +2,21 @@
 
 class erLhcoreClassUpdate
 {
-	const DB_VERSION = 126;
-	const LHC_RELEASE = 251;
+	const DB_VERSION = 161;
+	const LHC_RELEASE = 286;
 
 	public static function doTablesUpdate($definition){
 		$updateInformation = self::getTablesStatus($definition);
 		$db = ezcDbInstance::get();
 
-		$errorMessages = array();
+        $errorMessages = array();
+
+		try{
+            $db->query('SET GLOBAL innodb_file_per_table=1;');
+            $db->query('SET GLOBAL innodb_large_prefix=1;');
+        } catch (Exception $e) {
+            //$errorMessages[] = $e->getMessage();
+        }
 
 		foreach ($updateInformation as $table => $tableData) {
 			if ($tableData['error'] == true) {
@@ -32,24 +39,51 @@ class erLhcoreClassUpdate
 		$tablesStatus = array();
 		
 		// Get archive tables		
-		$archives = erLhcoreClassChat::getList(array('offset' => 0, 'limit' => 1000000,'sort' => 'id ASC'), 'erLhcoreClassModelChatArchiveRange', 'lh_chat_archive_range');
+		$archives = erLhcoreClassModelChatArchiveRange::getList(array('ignore_fields' => array('year_month','range_from','range_to','older_than','last_id','first_id'),'offset' => 0, 'limit' => 1000000,'sort' => 'id ASC'));
 			
-		// Update archives tables also
-		foreach ($archives as $archive) {
-		    $archive->setTables();
-		    $definition['tables'][erLhcoreClassModelChatArchiveRange::$archiveTable] = $definition['tables']['lh_chat'];
-		    $definition['tables'][erLhcoreClassModelChatArchiveRange::$archiveMsgTable] = $definition['tables']['lh_msg'];
+		if (isset($definition['tables']['lh_chat']) && isset($definition['tables']['lh_msg']))
+		{
+    		// Update archives tables also
+    		foreach ($archives as $archive) {
+    		    $archive->setTables();
+    		    $definition['tables'][erLhcoreClassModelChatArchiveRange::$archiveTable] = $definition['tables']['lh_chat'];
+    		    $definition['tables'][erLhcoreClassModelChatArchiveRange::$archiveMsgTable] = $definition['tables']['lh_msg'];
+    		}
 		}
-		
+
+		if (isset($definition['tables_collation'])){
+            foreach ($definition['tables_collation'] as $table => $dataTableCollation) {
+                $tablesStatus[$table] = array('error' => false, 'status' => '', 'queries' => array());
+                try {
+                    $stmt = $db->prepare("show table status like '{$table}'");
+                    $stmt->execute();
+                    $tableData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!empty($tableData) && $tableData['collation'] != $dataTableCollation) {
+                        $tablesStatus[$table]['queries'][] = "ALTER TABLE `{$table}` COMMENT='' COLLATE '{$dataTableCollation}';";
+                        $tablesStatus[$table]['error'] = true;
+                        $tablesStatus[$table]['status'] = "{$table} collation {$tableData['collation']} mismatch expected {$dataTableCollation}";
+                    }
+
+                } catch (Exception $e) {
+                    // Just not existing table perhaps
+                }
+            }
+        }
+
 		foreach ($definition['tables'] as $table => $tableDefinition) {
-			$tablesStatus[$table] = array('error' => false,'status' => '','queries' => array());
+
+		    if (!isset( $tablesStatus[$table])) {
+                $tablesStatus[$table] = array('error' => false, 'status' => '', 'queries' => array());
+            }
+
 			try {
-				$sql = 'SHOW COLUMNS FROM '.$table;
+				$sql = 'SHOW FULL COLUMNS FROM '.$table;
 				$stmt = $db->prepare($sql);
 				$stmt->execute();
 				$columnsData = $stmt->fetchAll(PDO::FETCH_ASSOC);				
 				$columnsDesired = (array)$tableDefinition;
-				
+
 				$status = array();
 				$fieldsHandled = array();
 				$existingColumns = array();
@@ -79,9 +113,13 @@ class erLhcoreClassUpdate
 					}
 				}
 
+				$tableDataChanged = false;
+				$queriesChangeType = array();
+
 				foreach ($columnsDesired as $columnDesired) {
 					$columnFound = false;
 					$typeMatch = true;
+					$collationMatch = true;
 					foreach ($columnsData as $column) {
 						if ($columnDesired['field'] == $column['field']) {
 							$columnFound = true;
@@ -89,20 +127,30 @@ class erLhcoreClassUpdate
 							if ($columnDesired['type'] != $column['type']) {
 								$typeMatch = false;
 							}
+
+							if ($column['collation'] != '' && isset($columnDesired['collation']) && $columnDesired['collation'] != $column['collation']) {
+                                $typeMatch = $collationMatch = false;
+							}
 						}	
 					}
 
 					if ($typeMatch == false) {
+                        $tableDataChanged = true;
+
 						$tablesStatus[$table]['error'] = true;
-						$status[] = "[{$columnDesired['field']}] column type is not correct";
+						$status[] = "[{$columnDesired['field']}] column type/collation is not correct";
 
 						$extra = '';
 						if ($columnDesired['extra'] == 'auto_increment') {
 						    $extra = ' AUTO_INCREMENT';
 						}
-						
-						$tablesStatus[$table]['queries'][] = "ALTER TABLE `{$table}`
-						CHANGE `{$columnDesired['field']}` `{$columnDesired['field']}` {$columnDesired['type']} NOT NULL{$extra};";
+
+						$collation = '';
+                        if ($collationMatch == false) {
+                            $collation = " COLLATE '".$columnDesired['collation']."' ";
+                        }
+
+                        $queriesChangeType[] = "CHANGE `{$columnDesired['field']}` `{$columnDesired['field']}` {$columnDesired['type']}{$collation} NOT NULL{$extra}";
 					}
 					
 					if ($columnFound == false && !in_array($columnDesired['field'], $fieldsHandled)) {
@@ -120,6 +168,10 @@ class erLhcoreClassUpdate
 						COMMENT='';";
 					}					
 				}
+
+				if ($tableDataChanged == true) {
+                    $tablesStatus[$table]['queries'][] = "ALTER TABLE `{$table}` " . implode(', ', $queriesChangeType) . ';';
+                }
 				
 				if (!empty($status)) {
 					$tablesStatus[$table]['status'] = implode(", ", $status);
@@ -172,7 +224,9 @@ class erLhcoreClassUpdate
 		        // Just not existing table perhaps
 		    }	    
 		}
-				
+
+
+
 		foreach ($definition['tables_data'] as $table => $dataTable) {
 			$tableIdentifier = $definition['tables_data_identifier'][$table];
 			

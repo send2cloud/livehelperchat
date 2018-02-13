@@ -17,7 +17,11 @@ if (isset($_POST['Save_departament']))
         erLhcoreClassDepartament::getSession()->save($Departament);
 
         erLhcoreClassDepartament::validateDepartmentCustomWorkHours($Departament);
-
+        
+        erLhcoreClassDepartament::validateDepartmentProducts($Departament);
+        
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('department.modified',array('department' => $Departament));
+        
         erLhcoreClassModule::redirect('department/departments');
         exit ;
 

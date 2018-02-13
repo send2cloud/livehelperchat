@@ -1,49 +1,68 @@
 <?php
 
+header('content-type: application/json; charset=utf-8');
+
 // Set new chat owner
 $currentUser = erLhcoreClassUser::instance();
 
 if (!isset($_SERVER['HTTP_X_CSRFTOKEN']) || !$currentUser->validateCSFRToken($_SERVER['HTTP_X_CSRFTOKEN'])) {
-	echo json_encode(array('error' => 'true', 'result' => 'Invalid CSRF Token' ));
+	echo json_encode(array('error' => true, 'result' => 'Invalid CSRF Token' ));
 	exit;
 }
 
-$chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $Params['user_parameters']['chat_id']);
+$db = ezcDbInstance::get();
+$db->beginTransaction();
 
-// Chat can be closed only by owner
-if ($chat->user_id == $currentUser->getUserID() || $currentUser->hasAccessTo('lhchat','allowcloseremote'))
-{
-	if ($chat->status != erLhcoreClassModelChat::STATUS_CLOSED_CHAT) {
+try {
 
-	    $chat->status = erLhcoreClassModelChat::STATUS_CLOSED_CHAT;
-	    $chat->chat_duration = erLhcoreClassChat::getChatDurationToUpdateChatID($chat->id);
+    $chat = erLhcoreClassModelChat::fetchAndLock($Params['user_parameters']['chat_id']);
 
-	    $userData = $currentUser->getUserData(true);
+    erLhcoreClassChat::lockDepartment($chat->dep_id, $db);
 
-	    $msg = new erLhcoreClassModelmsg();
-	    $msg->msg = (string)$userData.' '.erTranslationClassLhTranslation::getInstance()->getTranslation('chat/closechatadmin','has closed the chat!');
-	    $msg->chat_id = $chat->id;
-	    $msg->user_id = -1;
-	    $chat->last_user_msg_time = $msg->time = time();
+    // Chat can be closed only by owner
+    if ($chat->user_id == $currentUser->getUserID() || ($currentUser->hasAccessTo('lhchat','allowcloseremote') && erLhcoreClassChat::hasAccessToWrite($chat)))
+    {
+        if ($chat->status != erLhcoreClassModelChat::STATUS_CLOSED_CHAT) {
 
-	    erLhcoreClassChat::getSession()->save($msg);
+            $chat->status = erLhcoreClassModelChat::STATUS_CLOSED_CHAT;
+            $chat->chat_duration = erLhcoreClassChat::getChatDurationToUpdateChatID($chat->id);
+            $chat->has_unread_messages = 0;
 
-	    erLhcoreClassChat::getSession()->update($chat);
-	    
-	    erLhcoreClassChat::updateActiveChats($chat->user_id);
-	    
-	    if ($chat->department !== false) {
-	        erLhcoreClassChat::updateDepartmentStats($chat->department);
-	    }
-	    
-	    // Execute callback for close chat
-	    erLhcoreClassChat::closeChatCallback($chat,$userData);	   
-	}
+            $userData = $currentUser->getUserData(true);
+
+            $msg = new erLhcoreClassModelmsg();
+            $msg->msg = (string)$userData.' '.erTranslationClassLhTranslation::getInstance()->getTranslation('chat/closechatadmin','has closed the chat!');
+            $msg->chat_id = $chat->id;
+            $msg->user_id = -1;
+            $chat->last_user_msg_time = $msg->time = time();
+
+            erLhcoreClassChat::getSession()->save($msg);
+
+            if ($chat->wait_time == 0) {
+                $chat->wait_time = time() - $chat->time;
+            }
+
+            erLhcoreClassChat::getSession()->update($chat);
+
+            erLhcoreClassChat::updateActiveChats($chat->user_id);
+
+            if ($chat->department !== false) {
+                erLhcoreClassChat::updateDepartmentStats($chat->department);
+            }
+
+            // Execute callback for close chat
+            erLhcoreClassChat::closeChatCallback($chat,$userData);
+        }
+    }
+
+    $db->commit();
+    echo json_encode(array('error' => false, 'result' => 'ok' ));
+} catch (Exception $e) {
+    erLhcoreClassLog::write($e->getTraceAsString());
+    echo json_encode(array('error' => true, 'result' => $e->getMessage() ));
+    $db->rollback();
 }
 
-CSCacheAPC::getMem()->removeFromArray('lhc_open_chats', (int)$Params['user_parameters']['chat_id']);
-
-echo json_encode(array('error' => 'false', 'result' => 'ok' ));
 exit;
 
 ?>

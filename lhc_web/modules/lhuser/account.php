@@ -1,5 +1,11 @@
 <?php
 
+/*$chatResponder = erLhAbstractModelAutoResponderChat::fetch(186);
+print_r($chatResponder->auto_responder);
+exit;*/
+
+
+
 $tpl = erLhcoreClassTemplate::getInstance( 'lhuser/account.tpl.php' );
 
 $currentUser = erLhcoreClassUser::instance();
@@ -15,10 +21,23 @@ if (erLhcoreClassUser::instance()->hasAccessTo('lhuser','allowtochoosependingmod
 		exit;
 	}
 	
-	$showAllPending = erLhcoreClassUserValidator::validateShowAllPendingOption();
+	$pendingSettings = erLhcoreClassUserValidator::validateShowAllPendingOption();
 	
-	erLhcoreClassModelUserSetting::setSetting('show_all_pending', $showAllPending);
-	
+	erLhcoreClassModelUserSetting::setSetting('show_all_pending', $pendingSettings['show_all_pending']);
+
+    $UserData->exclude_autoasign = $pendingSettings['exclude_autoasign'];
+    $UserData->auto_accept = $pendingSettings['auto_accept'];
+    $UserData->max_active_chats = $pendingSettings['max_chats'];
+    $UserData->saveThis();
+
+    // Update max active chats directly
+    $db = ezcDbInstance::get();
+    $stmt = $db->prepare('UPDATE lh_userdep SET max_chats = :max_chats, exclude_autoasign = :exclude_autoasign WHERE user_id = :user_id');
+    $stmt->bindValue(':max_chats', $UserData->max_active_chats, PDO::PARAM_INT);
+    $stmt->bindValue(':user_id', $UserData->id, PDO::PARAM_INT);
+    $stmt->bindValue(':exclude_autoasign', $UserData->exclude_autoasign, PDO::PARAM_INT);
+    $stmt->execute();
+
 	$tpl->set('account_updated','done');
 	$tpl->set('tab','tab_pending');
 	
@@ -54,7 +73,8 @@ if (erLhcoreClassUser::instance()->hasAccessTo('lhuser','change_visibility_list'
 	erLhcoreClassModelUserSetting::setSetting('enable_active_list', $validateVisibilityListData['enable_active_list']);
 	erLhcoreClassModelUserSetting::setSetting('enable_close_list', $validateVisibilityListData['enable_close_list']);
 	erLhcoreClassModelUserSetting::setSetting('enable_unread_list', $validateVisibilityListData['enable_unread_list']);
-	
+	erLhcoreClassModelUserSetting::setSetting('enable_mchats_list', $validateVisibilityListData['enable_mchats_list']);
+
 	$tpl->set('account_updated','done');
 	$tpl->set('tab','tab_settings');
 	
@@ -82,13 +102,41 @@ if (isset($_POST['Update'])) {
     if (count($Errors) == 0) {
     	
         erLhcoreClassUser::getSession()->update($UserData);
-        
+
+        erLhcoreClassUserDep::setHideOnlineStatus($UserData);
+
+        erLhcoreClassChat::updateActiveChats($UserData->id);
+
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.operator_status_changed',array('user' => & $UserData, 'reason' => 'user_action'));
+
         $tpl->set('account_updated','done');
 
     }  else {
         $tpl->set('errors',$Errors);
     }
     
+}
+
+if (isset($_POST['UpdateNotifications_account'])) {
+    
+    if (!isset($_POST['csfr_token']) || !$currentUser->validateCSFRToken($_POST['csfr_token'])) {
+        erLhcoreClassModule::redirect('user/account');
+        exit;
+    }
+    
+    $validateNotificationsData = erLhcoreClassUserValidator::validateNotifications();
+
+
+
+    erLhcoreClassModelUserSetting::setSetting('show_alert_chat', $validateNotificationsData['show_alert_chat']);
+    erLhcoreClassModelUserSetting::setSetting('sn_off', $validateNotificationsData['sn_off']);
+    erLhcoreClassModelUserSetting::setSetting('ownntfonly', $validateNotificationsData['ownntfonly']);
+    erLhcoreClassModelUserSetting::setSetting('trackactivity', $validateNotificationsData['trackactivity']);
+    erLhcoreClassModelUserSetting::setSetting('trackactivitytimeout', $validateNotificationsData['trackactivitytimeout']);
+    erLhcoreClassModelUserSetting::setSetting('show_alert_transfer', $validateNotificationsData['show_alert_transfer']);
+
+    $tpl->set('account_updated','done');
+    $tpl->set('tab','tab_notifications');  
 }
 
 $currentUser = erLhcoreClassUser::instance();
@@ -101,23 +149,32 @@ if ($allowEditDepartaments && isset($_POST['UpdateDepartaments_account'])) {
 		erLhcoreClassModule::redirect('user/account');
 		exit;
 	}
-   
+
 	$globalDepartament = erLhcoreClassUserValidator::validateDepartments($UserData);
-   	
+
+    $readOnlyDepartments = array();
+    if (isset($_POST['UserDepartamentRead']) && count($_POST['UserDepartamentRead']) > 0) {
+        $readOnlyDepartments = $_POST['UserDepartamentRead'];
+    }
+
 	erLhcoreClassUser::getSession()->update($UserData);
 	
 	if (count($globalDepartament) > 0) {
-		erLhcoreClassUserDep::addUserDepartaments($globalDepartament, false, $UserData);
+		erLhcoreClassUserDep::addUserDepartaments($globalDepartament, false, $UserData, $readOnlyDepartments);
 	} else {
-		erLhcoreClassUserDep::addUserDepartaments(array(), false, $UserData);
+		erLhcoreClassUserDep::addUserDepartaments(array(), false, $UserData, $readOnlyDepartments);
 	}
    		
 	erLhcoreClassModelDepartamentGroupUser::addUserDepartmentGroups($UserData, erLhcoreClassUserValidator::validateDepartmentsGroup($UserData));
+	
+	erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.after_user_departments_update',array('user' => & $UserData));
 	
 	$tpl->set('account_updated_departaments','done');
 	$tpl->set('tab','tab_departments');
    
 }
+
+
 
 // If already set during account update
 if (!isset($UserData)) {
@@ -153,9 +210,14 @@ if ( erLhcoreClassUser::instance()->hasAccessTo('lhuser','personalcannedmsg') ) 
 	{	
 		$Errors = erLhcoreClassAdminChatValidatorHelper::validateCannedMessage($cannedMessage, true);
 				
+		erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.canned_msg_before_save',array('errors' => & $Errors, 'msg' => & $cannedMessage, 'scope' => 'user'));
+		
 		if (count($Errors) == 0) {		
 			$cannedMessage->user_id = $UserData->id;
-			$cannedMessage->saveThis();			
+			$cannedMessage->saveThis();	
+			
+			erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.canned_msg_after_save',array('msg' => & $cannedMessage));
+			
 			$tpl->set('updated_canned',true);
 		}  else {
 			$tpl->set('errors_canned',$Errors);
@@ -190,6 +252,11 @@ if ( erLhcoreClassUser::instance()->hasAccessTo('lhuser','personalcannedmsg') ) 
 	
 }
 
+erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.account', array('userData' => & $UserData, 'tpl' => & $tpl, 'params' => $Params));
+
 $Result['content'] = $tpl->fetch();
+$Result['additional_footer_js'] = '<script src="'.erLhcoreClassDesign::designJS('js/angular.lhc.cannedmsg.js').'"></script>';
+
+erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.account_result', array('result' => & $Result));
 
 ?>

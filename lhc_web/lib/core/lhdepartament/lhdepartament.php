@@ -59,7 +59,7 @@ class erLhcoreClassDepartament{
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
 	   			),
 	   			'TansferDepartmentID' => new ezcInputFormDefinitionElement(
-	   					ezcInputFormDefinitionElement::OPTIONAL, 'int',array('min_range' => 1)
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'int', array('min_range' => 1)
 	   			),
 	   			'TransferTimeout' => new ezcInputFormDefinitionElement(
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'int', array('min_range' => 5)
@@ -94,10 +94,22 @@ class erLhcoreClassDepartament{
 	   			'VisibleIfOnline' => new ezcInputFormDefinitionElement(
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
 	   			),
+                'ExcludeInactiveChats' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+	   			),
 	   			'MaxNumberActiveChats' => new ezcInputFormDefinitionElement(
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
 	   			),
 	   			'MaxWaitTimeoutSeconds' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
+	   			)
+                ,'MaxNumberActiveDepChats' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
+	   			),
+	   			'pending_max' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
+	   			),
+                'delay_before_assign' => new ezcInputFormDefinitionElement(
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'int'
 	   			),
 	   			'inform_unread_delay' => new ezcInputFormDefinitionElement(
@@ -108,6 +120,21 @@ class erLhcoreClassDepartament{
 	   			),
 	   			'inform_options' => new ezcInputFormDefinitionElement(
 	   					ezcInputFormDefinitionElement::OPTIONAL, 'string', null, FILTER_REQUIRE_ARRAY
+	   			),
+	   			'inform_close_all' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+	   			),
+	   			'inform_close_all_email' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'string'
+	   			),
+	   			'DepartamentProducts' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'int', null, FILTER_REQUIRE_ARRAY
+	   			),
+	   			'products_enabled' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
+	   			),
+	   			'products_required' => new ezcInputFormDefinitionElement(
+	   					ezcInputFormDefinitionElement::OPTIONAL, 'boolean'
 	   			),
 	   	);
 
@@ -155,18 +182,34 @@ class erLhcoreClassDepartament{
 		   		$department->active_balancing = 0;
 		   	}
 		   	
-		   	if ( $form->hasValidData( 'MaxNumberActiveChats' ) )
-		   	{
+		   	if ( $form->hasValidData( 'MaxNumberActiveChats' ) )	{
 		   		$department->max_active_chats = $form->MaxNumberActiveChats;
 		   	} else {
 		   		$department->max_active_chats = 0;
 		   	}
 		   	
-		   	if ( $form->hasValidData( 'MaxWaitTimeoutSeconds' ) )
-		   	{
+		   	if ( $form->hasValidData( 'MaxWaitTimeoutSeconds' ) )	{
 		   		$department->max_timeout_seconds = $form->MaxWaitTimeoutSeconds;
 		   	} else {
 		   		$department->max_timeout_seconds = 0;
+		   	}
+
+		   	if ( $form->hasValidData( 'delay_before_assign' ) )	{
+		   		$department->delay_before_assign = $form->delay_before_assign;
+		   	} else {
+		   		$department->delay_before_assign = 0;
+		   	}
+
+		   	if ( $form->hasValidData( 'ExcludeInactiveChats' ) )	{
+		   		$department->exclude_inactive_chats = $form->ExcludeInactiveChats;
+		   	} else {
+		   		$department->exclude_inactive_chats = 0;
+		   	}
+
+		   	if ( $form->hasValidData( 'MaxNumberActiveDepChats' ) )	{
+		   		$department->max_ac_dep_chats = $form->MaxNumberActiveDepChats;
+		   	} else {
+		   		$department->max_ac_dep_chats = 0;
 		   	}
 	   	}
 	   	
@@ -212,6 +255,13 @@ class erLhcoreClassDepartament{
 	   		$department->delay_lm = 0;
 	   	}
 	   	
+	   	if ( $form->hasValidData( 'pending_max' ) )
+	   	{
+	   		$department->pending_max = $form->pending_max;
+	   	} else {
+	   		$department->pending_max = 0;
+	   	}
+	   	
 	   	if ( $form->hasValidData( 'Email' ) ) {	   	
 	   		$partsEmail = explode(',', $form->Email);
 	   		$validatedEmail = array();
@@ -255,6 +305,18 @@ class erLhcoreClassDepartament{
 	   		$department->inform_close = 0;
 	   	}
 	   		   	
+	   	if ( $form->hasValidData( 'inform_close_all' ) && $form->inform_close_all === true ) {
+	   		$department->inform_close_all = 1;
+	   	} else {
+	   		$department->inform_close_all = 0;
+	   	}
+	   		   	
+	   	if ( $form->hasValidData( 'inform_close_all_email' ) ) {
+	   		$department->inform_close_all_email = $form->inform_close_all_email;
+	   	} else {
+	   		$department->inform_close_all_email = '';
+	   	}
+
 	   	if ( $form->hasValidData( 'inform_unread' ) && $form->inform_unread === true ) {
 	   		$department->inform_unread = 1;
 	   	} else {
@@ -292,7 +354,24 @@ class erLhcoreClassDepartament{
 	   	} else {
 	   		$department->online_hours_active = 0;
 	   	}
-	   		   	
+
+	   	$productsConfiguration = array();
+	   	
+	   	if ( $form->hasValidData( 'products_enabled' ) && $form->products_enabled === true ) {
+	   		$productsConfiguration['products_enabled'] = 1;
+	   	} else {
+	   		$productsConfiguration['products_enabled'] = 0;
+	   	}
+	   	
+	   	if ( $form->hasValidData( 'products_required' ) && $form->products_required === true ) {
+	   		$productsConfiguration['products_required'] = 1;
+	   	} else {
+	   		$productsConfiguration['products_required'] = 0;
+	   	}
+	   	
+	   	$department->product_configuration_array = $productsConfiguration;
+	   	$department->product_configuration = json_encode($productsConfiguration);
+	   	
 	   	if ( $form->hasValidData( 'inform_options' ) ) {
 	   		$department->inform_options = serialize($form->inform_options);
 	   		$department->inform_options_array = $form->inform_options;
@@ -353,9 +432,34 @@ class erLhcoreClassDepartament{
                $department->$key = -1;
            }
        }
-	   	
-	   	return $Errors;
-   	
+       
+       if ( $form->hasValidData( 'DepartamentProducts' ) && !empty($form->DepartamentProducts)) {
+           $department->departament_products_id = $form->DepartamentProducts;
+       } else {
+           $department->departament_products_id = array();
+       }
+       
+	   return $Errors;   	
+   }
+
+   public static function validateDepartmentProducts(erLhcoreClassModelDepartament $departament)
+   {
+       /**
+        * Remove old
+        */
+       $db = ezcDbInstance::get();
+       $stmt = $db->prepare('DELETE FROM lh_abstract_product_departament WHERE departament_id = :departament_id');
+       $stmt->bindValue(':departament_id',$departament->id,PDO::PARAM_INT);
+       $stmt->execute();
+       
+       if (is_array($departament->departament_products_id)) {
+           foreach ($departament->departament_products_id as $id) {
+               $item = new erLhAbstractModelProductDepartament();
+               $item->product_id = $id;
+               $item->departament_id = $departament->id;
+               $item->saveThis();
+           }
+       }       
    }
 
     /**
@@ -461,6 +565,42 @@ class erLhcoreClassDepartament{
     * Validates department group submit
     * 
     * @param erLhcoreClassModelDepartamentGroup $departamentGroup
+    */
+   public static function validateDepartmentLimitGroup(erLhcoreClassModelDepartamentLimitGroup $departamentGroup)
+   {
+       $availableCustomWorkHours = array();
+       
+       $definition = array(
+           'Name' => new ezcInputFormDefinitionElement(
+               ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw'
+           ),
+           'PendingMax' => new ezcInputFormDefinitionElement(
+               ezcInputFormDefinitionElement::OPTIONAL, 'int'
+           )
+       );
+       
+       $form = new ezcInputForm( INPUT_POST, $definition );
+       $Errors = array();
+        
+       if ( !$form->hasValidData( 'Name' ) || $form->Name == '' ) {
+           $Errors[] =  erTranslationClassLhTranslation::getInstance()->getTranslation('departament/editgroup','Please enter a department group name');
+       } else {
+           $departamentGroup->name = $form->Name;
+       }
+       
+       if ( $form->hasValidData( 'PendingMax' )) {
+           $departamentGroup->pending_max = $form->PendingMax;
+       } else {
+           $departamentGroup->pending_max = 0;
+       }
+       
+       return $Errors;
+   }
+   
+   /**
+    * Validates department group submit
+    * 
+    * @param erLhcoreClassModelDepartamentGroup $departamentGroup
     * 
     */
    public static function validateDepartmentGroupDepartments(erLhcoreClassModelDepartamentGroup $departamentGroup)
@@ -481,6 +621,60 @@ class erLhcoreClassDepartament{
            self::assignDepartmentsToGroup($departamentGroup, array());
        }
    }
+   
+   /**
+    * Validates department group submit
+    * 
+    * @param erLhcoreClassModelDepartamentLimitGroup $departamentGroup
+    * 
+    */
+   public static function validateDepartmentGroupLimitDepartments(erLhcoreClassModelDepartamentLimitGroup $departamentGroup)
+   {
+       $definition = array(
+           'departaments' => new ezcInputFormDefinitionElement(
+               ezcInputFormDefinitionElement::OPTIONAL, 'unsafe_raw', null, FILTER_REQUIRE_ARRAY
+           ));
+       
+       $form = new ezcInputForm( INPUT_POST, $definition );
+       $Errors = array();
+       
+       if ( $form->hasValidData( 'departaments' ) && !empty($form->departaments)) {
+           // Remove old departaments
+           self::assignDepartmentsToLimitGroup($departamentGroup, $form->departaments);
+       } else {
+           // Remove old departaments
+           self::assignDepartmentsToLimitGroup($departamentGroup, array());
+       }
+   }
+   
+   public static function assignDepartmentsToLimitGroup(erLhcoreClassModelDepartamentLimitGroup $departamentGroup, $ids)
+   {
+       $members = erLhcoreClassModelDepartamentLimitGroupMember::getList(array('limit' => false,'filter' => array('dep_limit_group_id' => $departamentGroup->id)));
+       
+       $newMembers = array();
+       $removeMembers = array();       
+       $oldMembers = array();
+       
+       // Remove old members
+       foreach ($members as $member) {
+           if (!in_array($member->dep_id, $ids)) {
+               $member->removeThis();
+           } else {
+               $oldMembers[] = $member->dep_id;
+           }
+       }
+       
+       // Store new members
+       foreach ($ids as $id) {
+           if (!in_array($id, $oldMembers)) {
+               $member = new erLhcoreClassModelDepartamentLimitGroupMember();
+               $member->dep_id = $id;
+               $member->dep_limit_group_id = $departamentGroup->id;
+               $member->saveThis();
+           }
+       }
+   }
+   
    
    public static function assignDepartmentsToGroup(erLhcoreClassModelDepartamentGroup $departamentGroup, $ids)
    {

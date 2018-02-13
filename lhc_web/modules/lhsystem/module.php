@@ -19,6 +19,16 @@ $ViewList['configuration'] = array(
     'functions' => array( 'use' )
 );
 
+$ViewList['offlinesettings'] = array(
+    'params' => array(),
+    'functions' => array( 'offlinesettings' )
+);
+
+$ViewList['usersactions'] = array(
+    'params' => array(),
+    'functions' => array( 'use' )
+);
+
 $ViewList['expirecache'] = array(
     'params' => array(),
     'functions' => array( 'expirecache' )
@@ -46,6 +56,12 @@ $ViewList['update'] = array(
     'functions' => array( 'performupdate' )
 );
 
+$ViewList['transferconfiguration'] = array(
+    'params' => array(),
+    'uparams' => array('action'),
+    'functions' => array( 'transferconfiguration' )
+);
+
 $ViewList['autodbupdate'] = array(
     'params' => array('hash'),
     'uparams' => array()
@@ -61,5 +77,7 @@ $FunctionList['timezone'] = array('explain' => 'Allow user to change global time
 $FunctionList['performupdate'] = array('explain' => 'Allow user to update Live Helper Chat');
 $FunctionList['changetemplates'] = array('explain' => 'Allow user to change e-mail templates');
 $FunctionList['generate_js_tab'] = array('explain' => 'User can see embed code tab');
+$FunctionList['transferconfiguration'] = array('explain' => 'User can configure transfer options');
+$FunctionList['offlinesettings'] = array('explain' => 'Allow user to change offline settings');
 
 ?>

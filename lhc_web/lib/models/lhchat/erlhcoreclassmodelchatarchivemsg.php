@@ -5,6 +5,9 @@
  * */
 class erLhcoreClassModelChatArchiveMsg extends erLhcoreClassModelmsg {
 
+    public static $dbTable = null;
+
+    use erLhcoreClassDBTrait;
 }
 
 ?>

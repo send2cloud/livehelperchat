@@ -24,12 +24,14 @@ if ( erLhcoreClassModelChatConfig::fetch('track_online_visitors')->current_value
 if ($Params['user_parameters_unordered']['hash'] != '') {
     list($chatID,$hash) = explode('_',$Params['user_parameters_unordered']['hash']);
     try {
-	        $chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $chatID);
-	        if ($chat->hash == $hash && $chat->user_status != 1) {
-	        	       	
-		        	$db = ezcDbInstance::get();
-		        	$db->beginTransaction();
-	
+	        
+            $db = ezcDbInstance::get();
+            $db->beginTransaction();
+            
+            $chat = erLhcoreClassModelChat::fetchAndLock($chatID);
+    	        
+	        if ($chat->hash == $hash &&  $chat->user_status != 1) {	                
+		        	
 				        // User closed chat
 				        $chat->user_status = erLhcoreClassModelChat::USER_STATUS_CLOSED_CHAT;
 				        $chat->support_informed = 1;
@@ -41,8 +43,13 @@ if ($Params['user_parameters_unordered']['hash'] != '') {
 				        	$chat->user_typing_txt = htmlspecialchars_decode(erTranslationClassLhTranslation::getInstance()->getTranslation('chat/userleftchat','Visitor has left the chat!'),ENT_QUOTES);
 				        }
 				        
+				        $explicitClosed = false;
+				        
 				        // User Closed Chat
 				        if ($Params['user_parameters_unordered']['eclose'] == 't') {
+
+                            erLhcoreClassChat::lockDepartment($chat->dep_id, $db);
+
 				            $chat->status_sub = erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT;
 				            
 				            $msg = new erLhcoreClassModelmsg();
@@ -59,6 +66,12 @@ if ($Params['user_parameters_unordered']['hash'] != '') {
 				            if ($chat->last_msg_id < $msg->id) {
 				               $chat->last_msg_id = $msg->id;
 				            }
+				            
+				            if ($chat->wait_time == 0) {
+				                $chat->wait_time = time() - $chat->time;
+				            }
+				            
+				            $explicitClosed = true;
 				        }
 				        
 				        if ( ($onlineuser = $chat->online_user) !== false) {
@@ -72,12 +85,18 @@ if ($Params['user_parameters_unordered']['hash'] != '') {
 				            erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.unread_chat',array('chat' => & $chat));
 				        }
 				        
-			        $db->commit();
+				        if ($explicitClosed == true) {
+
+                            if ($chat->user_id > 0) {
+                                erLhcoreClassChat::updateActiveChats($chat->user_id);
+                            }
+
+				            erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.explicitly_closed',array('chat' => & $chat));
+				        }
 	        
 	        } elseif ($chat->hash == $hash && $Params['user_parameters_unordered']['eclose'] == 't' && $chat->status_sub != erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT) {
-	            
-	            $db = ezcDbInstance::get();
-	            $db->beginTransaction();
+
+    	            erLhcoreClassChat::lockDepartment($chat->dep_id, $db);
 
                     // From now chat will be closed explicitly
                     $chat->status_sub = erLhcoreClassModelChat::STATUS_SUB_USER_CLOSED_CHAT;
@@ -102,10 +121,18 @@ if ($Params['user_parameters_unordered']['hash'] != '') {
                     if ($chat->has_unread_messages == 1 && $chat->last_user_msg_time < (time() - 5)) {
                         erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.unread_chat',array('chat' => & $chat));
                     }
+                    
+                    if ($chat->user_id > 0) {
+                        erLhcoreClassChat::updateActiveChats($chat->user_id);
+                    }
 
-                $db->commit();
+                    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.explicitly_closed',array('chat' => & $chat));
 	        }
+	        
+	        $db->commit();
+	        
     } catch (Exception $e) {
+        $db->rollback();
         // Do nothing
     }
 }

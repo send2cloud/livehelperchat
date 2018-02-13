@@ -16,7 +16,9 @@ if ((int)erLhcoreClassModelChatConfig::fetch('disable_send')->current_value == 1
 if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'] && ($chat->status == erLhcoreClassModelChat::STATUS_ACTIVE_CHAT || $chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT || erLhcoreClassChat::canReopen($chat,true)))
 {
     if ( ezcInputForm::hasPostData() ) {
-
+        
+        header('content-type: application/json; charset=utf-8');
+        
         $definition = array(
             'email' => new ezcInputFormDefinitionElement(
                 ezcInputFormDefinitionElement::OPTIONAL, 'validate_email'
@@ -41,7 +43,7 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'] && ($c
 
             $tpl = erLhcoreClassTemplate::getInstance('lhchat/sendmail.tpl.php');
             $mailTemplate = erLhAbstractModelEmailTemplate::fetch(3);
-            erLhcoreClassChatMail::prepareSendMail($mailTemplate);
+            erLhcoreClassChatMail::prepareSendMail($mailTemplate, $chat);
             $mailTemplate->recipient = $form->email;
 
             $messages = array_reverse(erLhcoreClassModelmsg::getList(array('customfilter' => array('user_id != -1'),'limit' => 500, 'sort' => 'id DESC','filter' => array('chat_id' => $chat->id))));
@@ -51,7 +53,7 @@ if (is_object($chat) && $chat->hash == $Params['user_parameters']['hash'] && ($c
             $tpl->set('chat', $chat);
             $tpl->set('messages', $messages);
 
-            $mailTemplate->content = str_replace(array('{user_chat_nick}','{messages_content}'), array($chat->nick,$tpl->fetch()), $mailTemplate->content);
+            $mailTemplate->content = str_replace(array('{user_chat_nick}','{messages_content}','{chat_id}'), array($chat->nick, $tpl->fetch(), $chat->id), $mailTemplate->content);
 
             erLhcoreClassChatMail::sendMail($mailTemplate, $chat);
 

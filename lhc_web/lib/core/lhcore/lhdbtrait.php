@@ -35,7 +35,20 @@ trait erLhcoreClassDBTrait {
 		$this->afterRemove();
 		$this->clearCache();
 	}
-	
+
+	public function syncAndLock() {
+	    
+	    $db = ezcDbInstance::get();
+	    
+	    $stmt = $db->prepare('SELECT * FROM ' . self::$dbTable . ' WHERE id = :id FOR UPDATE;');
+	    $stmt->bindValue(':id',$this->id);
+	    $stmt->execute();
+	    
+	    $data = $stmt->fetch(PDO::FETCH_ASSOC);
+	    
+	    $this->setState($data);	
+	}
+		
 	public function beforeSave() {
 	
 	}
@@ -107,7 +120,7 @@ trait erLhcoreClassDBTrait {
 	
 		if (isset($GLOBALS[__CLASS__.$id]) && $useCache == true) return $GLOBALS[__CLASS__.$id];
 
-		try {			
+		try {
 			$GLOBALS[__CLASS__.$id] = self::getSession()->load( __CLASS__, $id );
 		} catch (Exception $e) {
 			$GLOBALS[__CLASS__.$id] = false;
@@ -115,6 +128,19 @@ trait erLhcoreClassDBTrait {
 	
 		return $GLOBALS[__CLASS__.$id];
 		
+	}
+	
+	public static function fetchAndLock($id, $useCache = true)
+	{
+	    if (isset($GLOBALS[__CLASS__.$id]) && $useCache == true) return $GLOBALS[__CLASS__.$id];
+	    
+	    try {
+	        $GLOBALS[__CLASS__.$id] = self::getSession()->loadAndLock( __CLASS__, $id );
+	    } catch (Exception $e) {
+	        $GLOBALS[__CLASS__.$id] = false;
+	    }
+	    
+	    return $GLOBALS[__CLASS__.$id];
 	}
 	
 	/**
@@ -162,13 +188,13 @@ trait erLhcoreClassDBTrait {
 			
 	}
 	
-	public static function getCount($params = array()) {
+	public static function getCount($params = array(), $operation = 'COUNT', $field = false, $rawSelect = false) {
 	
 		if (isset($params['enable_sql_cache']) && $params['enable_sql_cache'] == true) {
 			$sql = erLhcoreClassModuleFunctions::multi_implode(',',$params);
 		
 			$cache = CSCacheAPC::getMem();
-			$cacheKey = isset($params['cache_key']) ? md5($sql.$params['cache_key']) : md5('objects_count_'.strtolower(__CLASS__).'_v_'.$cache->getCacheVersion('site_attributes_version_'.strtolower(__CLASS__)).$sql);
+			$cacheKey = isset($params['cache_key']) ? md5($operation.$field.$sql.$params['cache_key']) : md5('objects_count_'.strtolower(__CLASS__).'_v_'.$cache->getCacheVersion('site_attributes_version_'.strtolower(__CLASS__)).$sql.$operation.$field);
 		
 			if (($result = $cache->restore($cacheKey)) !== false)
 			{
@@ -179,15 +205,19 @@ trait erLhcoreClassDBTrait {
 		$session = self::getSession();
 	
 		$q = $session->database->createSelectQuery();
-			
-		$q->select( "COUNT(" . self::$dbTable . "." . self::$dbTableId . ")" )->from( self::$dbTable );
-	
+
+        if ($rawSelect === false) {
+            $q->select($operation . "(" . self::$dbTable . "." . ($field === false ? self::$dbTableId : $field) . ")")->from(self::$dbTable);
+        } else {
+            $q->select($rawSelect)->from(self::$dbTable);
+        }
+
 		$conditions = self::getConditions($params, $q);
 	
 		if (count($conditions) > 0) {
 			$q->where( $conditions );
 		}
-	
+
 		$stmt = $q->prepare();
 	
 		$stmt->execute();
@@ -223,14 +253,19 @@ trait erLhcoreClassDBTrait {
 				
 		$session = self::getSession();
 				
-		$q = $session->createFindQuery( __CLASS__ );
-			
+		$q = $session->createFindQuery( __CLASS__, isset($params['ignore_fields']) ? $params['ignore_fields'] : array() );
+
 		$conditions = self::getConditions($params, $q);
 	
 		if (count($conditions) > 0) {
 			$q->where( $conditions );
 		}
 	
+		if (isset($params['lock']) && $params['lock'] == true)
+		{
+		    $q->doLock();
+		}
+		
 		if ($params['limit'] !== false) {
 			$q->limit($params['limit'],$params['offset']);
 		}
@@ -401,11 +436,37 @@ trait erLhcoreClassDBTrait {
 	            $conditions[] = $fieldValue;
 	        }
 	    }
-	
+	    
+	    if (isset($params['customfilter']) && count($params['customfilter']) > 0)
+	    {
+	        foreach ($params['customfilter'] as $fieldValue)
+	        {
+	            $conditions[] = $fieldValue;
+	        }
+	    }
+	    
+	    if (isset($params['innerjoin']) && count($params['innerjoin']) > 0) {
+	        foreach ($params['innerjoin'] as $table => $joinOn) {
+	            $q->innerJoin($table, $q->expr->eq($joinOn[0], $joinOn[1]));
+	        }
+	    }
+	    
 	    if(isset($params['group']) && $params['group'] != '') {
 	        $q->groupBy($params['group']);
 	    }
-	
+	    
+	    if (isset($params['having']) && $params['having'] != '') {
+	        $q->having($params['having']);
+	    }
+	    
+	    if (isset($params['use_index'])) {
+	        $q->useIndex( $params['use_index'] );
+	    }
+	    
+	    if (isset($params['select_columns']) && !empty($params['select_columns'])) {
+	        $q->select($params['select_columns']);
+	    }
+	    
 	    return $conditions;
 	}
 	

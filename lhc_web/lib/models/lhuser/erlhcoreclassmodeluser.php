@@ -20,6 +20,7 @@ class erLhcoreClassModelUser {
             'job_title' => $this->job_title,
             'time_zone' => $this->time_zone,
             'invisible_mode' => $this->invisible_mode,
+            'inactive_mode' => $this->inactive_mode,
             'xmpp_username' => $this->xmpp_username,
             'rec_per_req' => $this->rec_per_req,
             'session_id' => $this->session_id,
@@ -28,10 +29,13 @@ class erLhcoreClassModelUser {
             'pending_chats_counter' => $this->pending_chats_counter,
             'departments_ids' => $this->departments_ids,
             'chat_nickname' => $this->chat_nickname,
+            'max_active_chats' => $this->max_active_chats,
+            'auto_accept' => $this->auto_accept,
             'attr_int_1' => $this->attr_int_1,
             'attr_int_2' => $this->attr_int_2,
             'attr_int_3' => $this->attr_int_3,
-            'operation_admin' => $this->operation_admin
+            'operation_admin' => $this->operation_admin,
+            'exclude_autoasign' => $this->exclude_autoasign
         );
    }
       
@@ -169,24 +173,7 @@ class erLhcoreClassModelUser {
        		break;
 
        	case 'lastactivity_ago':
-       		   $this->lastactivity_ago = '';
-
-       		   if ( $this->lastactivity > 0 ) {
-
-                    $periods         = array("s.", "m.", "h.", "d.", "w.", "m.", "y.", "dec.");
-                    $lengths         = array("60","60","24","7","4.35","12","10");
-
-                    $difference     = time() - $this->lastactivity;
-
-                    for ($j = 0; $difference >= $lengths[$j] && $j < count($lengths)-1; $j++) {
-                        $difference /= $lengths[$j];
-                    }
-
-                    $difference = round($difference);
-
-                   $this->lastactivity_ago = "$difference $periods[$j]";
-       		   };
-
+       		   $this->lastactivity_ago = erLhcoreClassChat::getAgoFormat($this->lastactivity);       		   
        		   return $this->lastactivity_ago;
        		break;
 
@@ -357,7 +344,7 @@ class erLhcoreClassModelUser {
 	   	}
    }
 
-	public function setUserGroups() {
+   public function setUserGroups() {
    		
 		erLhcoreClassModelGroupUser::removeUserFromGroups($this->id);
 		
@@ -409,7 +396,11 @@ class erLhcoreClassModelUser {
     public $closed_chats_counter = 0;
     public $pending_chats_counter = 0;
     public $operation_admin = '';
-    
+    public $inactive_mode = 0;
+    public $max_active_chats = 0;
+    public $auto_accept = 0;
+    public $exclude_autoasign = 0;
+
     public $attr_int_1 = 0;
     public $attr_int_2 = 0;
     public $attr_int_3 = 0;

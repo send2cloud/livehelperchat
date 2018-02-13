@@ -26,12 +26,72 @@ $fieldsSearch['nick'] = array (
     )
 );
 
+$fieldsSearch['chat_id'] = array (
+    'type' => 'text',
+    'trans' => 'id',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => 'filter',
+    'filter_table_field' => 'id',
+    'validation_definition' => new ezcInputFormDefinitionElement (
+            ezcInputFormDefinitionElement::OPTIONAL, 'int'
+    )
+);
+
+$fieldsSearch['wait_time_from'] = array (
+    'type' => 'text',
+    'trans' => 'id',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => 'filtergt',
+    'filter_table_field' => 'wait_time',
+    'validation_definition' => new ezcInputFormDefinitionElement (
+        ezcInputFormDefinitionElement::OPTIONAL, 'int'
+    )
+);
+
+$fieldsSearch['wait_time_till'] = array (
+    'type' => 'text',
+    'trans' => 'id',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => 'filterlte',
+    'filter_table_field' => 'wait_time',
+    'validation_definition' => new ezcInputFormDefinitionElement (
+        ezcInputFormDefinitionElement::OPTIONAL, 'int'
+    )
+);
+
+$fieldsSearch['chat_duration_from'] = array (
+    'type' => 'text',
+    'trans' => 'id',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => 'filtergt',
+    'filter_table_field' => 'chat_duration',
+    'validation_definition' => new ezcInputFormDefinitionElement (
+        ezcInputFormDefinitionElement::OPTIONAL, 'int'
+    )
+);
+
+$fieldsSearch['chat_duration_till'] = array (
+    'type' => 'text',
+    'trans' => 'id',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => 'filterlte',
+    'filter_table_field' => 'chat_duration',
+    'validation_definition' => new ezcInputFormDefinitionElement (
+        ezcInputFormDefinitionElement::OPTIONAL, 'int'
+    )
+);
+
 $fieldsSearch['timefrom'] = array (
     'type' => 'text',
     'trans' => 'Timefrom',
     'required' => false,
     'valid_if_filled' => false,
-    'datatype' => 'date',
+    'datatype' => 'datetime',
     'filter_type' => 'filtergte',
     'filter_table_field' => 'time',
     'validation_definition' => new ezcInputFormDefinitionElement (
@@ -44,7 +104,7 @@ $fieldsSearch['timeto'] = array (
     'trans' => 'Timeto',
     'required' => false,
     'valid_if_filled' => false,
-    'datatype' => 'date',
+    'datatype' => 'datetime',
     'filter_type' => 'filterlte',
     'filter_table_field' => 'time',
     'validation_definition' => new ezcInputFormDefinitionElement (
@@ -62,6 +122,30 @@ $fieldsSearch['department_id'] = array (
 	'validation_definition' => new ezcInputFormDefinitionElement(
 		ezcInputFormDefinitionElement::OPTIONAL, 'int', array( 'min_range' => 1)
 	)
+);
+
+$fieldsSearch['department_group_id'] = array (
+    'type' => 'text',
+    'trans' => 'Department group',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => false,
+    'filter_table_field' => 'dep_id',
+    'validation_definition' => new ezcInputFormDefinitionElement(
+        ezcInputFormDefinitionElement::OPTIONAL, 'int', array( 'min_range' => 1)
+    )
+);
+
+$fieldsSearch['group_id'] = array (
+    'type' => 'text',
+    'trans' => 'Group',
+    'required' => false,
+    'valid_if_filled' => false,
+    'filter_type' => false,
+    'filter_table_field' => 'user_id',
+    'validation_definition' => new ezcInputFormDefinitionElement(
+        ezcInputFormDefinitionElement::OPTIONAL, 'int', array( 'min_range' => 1)
+    )
 );
 
 $fieldsSearch['user_id'] = array (
@@ -108,7 +192,7 @@ $fieldsSearch['chat_status'] = array (
 	'filter_type' => 'filter',
 	'filter_table_field' => 'status',
 	'validation_definition' => new ezcInputFormDefinitionElement(
-		ezcInputFormDefinitionElement::OPTIONAL, 'int', array( 'min_range' => 0,'max_range' => 4)
+		ezcInputFormDefinitionElement::OPTIONAL, 'int', array( 'min_range' => 0,'max_range' => 1000)
 	)
 );
 

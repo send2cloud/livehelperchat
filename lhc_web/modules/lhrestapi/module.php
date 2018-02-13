@@ -13,6 +13,10 @@ $ViewList['chats'] = array(
     'params' => array()
 );
 
+$ViewList['updatelastactivity'] = array(
+    'params' => array('user_id')
+);
+
 $ViewList['fetchchat'] = array(
     'params' => array()
 );
@@ -41,6 +45,10 @@ $ViewList['setinvisibilitystatus'] = array(
     'params' => array()
 );
 
+$ViewList['setonlinestatus'] = array(
+    'params' => array('user_id','online')
+);
+
 $ViewList['isonline'] = array(
     'params' => array()
 );
@@ -55,6 +63,62 @@ $ViewList['getusers'] = array(
 
 $ViewList['getuser'] = array(
     'params' => array()
+);
+
+$ViewList['login'] = array(
+    'params' => array()
+);
+
+$ViewList['loginbytoken'] = array(
+    'params' => array()
+);
+
+$ViewList['logout'] = array(
+    'params' => array()
+);
+
+$ViewList['swagger'] = array(
+    'params' => array()
+);
+
+/**
+ * Calls dedicated to users
+ * */
+// Starts chat and returns chat data including chat id and hash
+$ViewList['startchat'] = array(
+    'params' => array(),
+    'uparams' => array('ua','operator','er','vid','hash_resume','sound','hash','offline','leaveamessage','department','priority','chatprefill','survey','prod','phash','pvhash'),
+    'multiple_arguments' => array ( 'department', 'ua', 'prod' )
+);
+
+$ViewList['addmsguser'] = array(
+    'params' => array()
+);
+
+$ViewList['setnewvid'] = array(
+    'params' => array()
+);
+
+// Checks is there any pending messages for online visitor and if there is return action what to do next
+$ViewList['chatcheckoperatormessage'] = array(
+    'params' => array(),
+    'uparams' => array('tz','operator','theme','priority','vid','count_page','identifier','department','ua','survey','uactiv','wopen'),
+    'multiple_arguments' => array ( 'department','ua' )
+);
+
+// Updates additional chat attributes
+$ViewList['updatechatattributes'] = array(
+    'params' => array()
+);
+
+// Closes chat from visitor perspective
+$ViewList['closechatasvisitor'] = array(
+    'params' => array()
+);
+
+$ViewList['checkchatstatus'] = array(
+    'params' => array(),
+    'uparams' => array('mode','theme','dot')
 );
 
 $FunctionList = array();

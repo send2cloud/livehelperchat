@@ -29,14 +29,7 @@ if (erLhcoreClassModelChatConfig::fetch('hide_disabled_department')->current_val
 $tpl = erLhcoreClassTemplate::getInstance('lhchat/getstatus.tpl.php');
 
 if ( erLhcoreClassModelChatConfig::fetch('track_online_visitors')->current_value == 1 ) {
-
-	$allchar = "abcdefghijklmnopqrstuvwxyz1234567890";
-	$str = "" ;
-	mt_srand (( double) microtime() * 1000000 );
-	for ( $i = 0; $i < 20 ; $i++ ) {
-		$str .= substr( $allchar, mt_rand (0,36), 1 );
-	}
-
+    $str = substr(sha1(mt_rand() . microtime()),0,20);
 	$tpl->set('vid', $str);
 }
 
@@ -68,7 +61,6 @@ $tpl->set('position',$Params['user_parameters_unordered']['position']);
 $tpl->set('minimize_action',$Params['user_parameters_unordered']['ma']);
 $tpl->set('identifier',(!is_null($Params['user_parameters_unordered']['identifier']) && !empty($Params['user_parameters_unordered']['identifier'])) ? (string)$Params['user_parameters_unordered']['identifier'] : false);
 $tpl->set('leaveamessage',(string)$Params['user_parameters_unordered']['leaveamessage'] == 'true');
-$tpl->set('noresponse',(string)$Params['user_parameters_unordered']['noresponse'] == 'true');
 $tpl->set('hide_offline',$Params['user_parameters_unordered']['hide_offline']);
 
 if (is_array($Params['user_parameters_unordered']['department'])){

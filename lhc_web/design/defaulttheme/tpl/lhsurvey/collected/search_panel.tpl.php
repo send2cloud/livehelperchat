@@ -33,6 +33,7 @@
 			<label><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','User');?></label>
 			<?php echo erLhcoreClassRenderHelper::renderCombobox( array (
 	                    'input_name'     => 'user_id',
+                        'display_name' => 'name_official',
 						'optional_field' => erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','Select user'),
 	                    'selected_id'    => $input->user_id,
 			            'css_class'      => 'form-control',
@@ -51,10 +52,10 @@
     			<div class="col-xs-3">
     				<div class="form-group">
 				    	<label><?php echo htmlspecialchars($survey->{$sortOption['field'] . '_title'});?></label>
-				    	<select name="<?php echo $sortOption['field']?>" class="form-control">
+				    	<select name="<?php echo $sortOption['field']?>[]" class="form-control" multiple="multiple" size="5">
 				    		<option value="0"><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','Any')?></option>
 				        <?php for ($n = 1; $n <= $survey->{$sortOption['field']}; $n++) : ?>
-				        	<option value="<?php echo $n?>" <?php if ($input->{$sortOption['field']} == $n) : ?>selected="selected"<?php endif;?>><?php echo $n?> stars</option>
+				        	<option value="<?php echo $n?>" <?php if (is_array($input->{$sortOption['field']}) && in_array($n, $input->{$sortOption['field']})) : ?>selected="selected"<?php endif;?>><?php echo $n?> stars</option>
 				        <?php endfor;?>      
 				        </select>
 				    </div>
@@ -68,7 +69,7 @@
 				    	<select name="<?php echo $sortOption['field']?>" class="form-control">
 				    		<option value="0"><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','Any')?></option>
 				        	<?php foreach ($survey->{$sortOption['field'] . '_items_front'} as $key => $item) : ?>
-				        		<option value="<?php echo $key+1?>" <?php if ($input->{$sortOption['field']} == ($key+1)) : ?>selected="selected"<?php endif;?>><?php echo htmlspecialchars($item['option'])?></option>
+				        		<option value="<?php echo $key+1?>" <?php if ($input->{$sortOption['field']} == ($key+1)) : ?>selected="selected"<?php endif;?>><?php echo erLhcoreClassSurveyValidator::parseAnswerPlain($item['option'])?></option>
 				        	<?php endforeach;?>      
 				        </select>				        
 				    </div>
@@ -99,8 +100,14 @@
 		<a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(print)/1"><i class="material-icons">print</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','Print');?></a>
 		
 		<?php if ($input->group_results == true) : ?>
-		  <a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(xls)/1"><i class="material-icons">&#xE2C4;</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','XLS');?></a>
-		<?php endif;?>
+            <a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(xls)/1"><i class="material-icons">&#xE2C4;</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','XLS');?></a>
+        <?php else : ?>
+            <a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(xlslist)/1"><i class="material-icons">&#xE2C4;</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','XLS');?></a>
+
+            <a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(xml)/1"><i class="material-icons">&#xE2C4;</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','XML');?></a>
+
+            <a target="_blank" class="btn btn-default" href="<?php echo $pages->serverURL?>/(json)/1"><i class="material-icons">&#xE2C4;</i><?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/lists/search_panel','JSON');?></a>
+        <?php endif;?>
 		
 		<?php endif; ?>
 	</div>	

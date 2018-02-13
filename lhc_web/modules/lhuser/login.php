@@ -56,7 +56,7 @@ if (isset($_POST['Login']))
 
     $beforeLoginAuthenticateErrors = array();
 
-    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.login_before_authenticate', array('errors' => & $beforeLoginAuthenticateErrors));
+    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.login_before_authenticate', array('errors' => & $beforeLoginAuthenticateErrors, 'tpl' => & $tpl));
 
     if (!empty($beforeLoginAuthenticateErrors)) {
         $tpl->set('errors', $beforeLoginAuthenticateErrors);
@@ -75,17 +75,23 @@ if (isset($_POST['Login']))
                 exit;
             }
         } else {
-            if($isExternalRequest) {
-                $tpl->set('msg', erTranslationClassLhTranslation::getInstance()->getTranslation('user/login','Logged in successfully'));
-
-                echo json_encode(array('success' => true, 'result' => $tpl->fetch()));
-                exit;
-            }
-            if ($redirect != '') {
-                erLhcoreClassModule::redirect(base64_decode($redirect));
-            } else {
-                erLhcoreClassModule::redirect();
-                exit;
+            
+            $response = erLhcoreClassChatEventDispatcher::getInstance()->dispatch('user.login_after_success_authenticate', array('current_user' => & $currentUser, 'tpl' => & $tpl));
+            
+            if ($response === false)
+            {
+                if($isExternalRequest) {
+                    $tpl->set('msg', erTranslationClassLhTranslation::getInstance()->getTranslation('user/login','Logged in successfully'));
+    
+                    echo json_encode(array('success' => true, 'result' => $tpl->fetch()));
+                    exit;
+                }
+                if ($redirect != '') {
+                    erLhcoreClassModule::redirect(base64_decode($redirect));
+                } else {
+                    erLhcoreClassModule::redirect();
+                    exit;
+                }
             }
         }
 
@@ -97,6 +103,10 @@ if (isset($_SESSION['logout_reason'])) {
     if ($_SESSION['logout_reason'] == 1) {
         $tpl->set('logout_reason',$_SESSION['logout_reason']);
     }
+}
+
+if (isset($Params['user_parameters_unordered']['noaccess']) && $Params['user_parameters_unordered']['noaccess'] == true) {
+    $tpl->set('session_ended',true);
 }
 
 $pagelayout = erConfigClassLhConfig::getInstance()->getOverrideValue('site','login_pagelayout');

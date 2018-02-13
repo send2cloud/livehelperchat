@@ -1,20 +1,20 @@
 <?php
 
-$dashboardOrder = (string)erLhcoreClassModelUserSetting::getSetting('dwo','');
+$dashboardOrder = json_decode(erLhcoreClassModelUserSetting::getSetting('dwo',''),true);
 
-if ($dashboardOrder == '') {
-    $dashboardOrder = erLhcoreClassModelChatConfig::fetch('dashboard_order')->current_value;
+if ($dashboardOrder === null) {
+	if ($dashboardOrder == '') {
+		$dashboardOrder = json_decode(erLhcoreClassModelChatConfig::fetch('dashboard_order')->current_value,true);
+	}
 }
-
-$dashboardOrder = explode('|',$dashboardOrder);
 
 $columnsTotal = count($dashboardOrder);
 $columnSize = 12 / $columnsTotal;
 
 ?>
-<div class="row" id="dashboard-body" ng-init='lhc.setUpListNames(["actived","closedd","unreadd","pendingd","operatord","departmentd"])'>
+<div class="row" id="dashboard-body">
      <a class="dashboard-configuration" onclick="return lhc.revealModal({'url':WWW_DIR_JAVASCRIPT +'chat/dashboardwidgets'})" title="<?php echo erTranslationClassLhTranslation::getInstance()->getTranslation('chat/syncadmininterface','Configure dashboard')?>"><i class="material-icons mr-0">&#xE871;</i></a>
-     <?php for ($i = 0; $i < $columnsTotal; $i++) : $widgets = array_filter(explode(',', $dashboardOrder[$i])); ?>
+     <?php foreach ($dashboardOrder as $widgets) : ?>
         <div class="col-md-<?php echo $columnSize+2?> col-lg-<?php echo $columnSize?> sortable-column-dashboard">
             <?php foreach ($widgets as $wiget) : ?>
                 <?php if ($wiget == 'online_operators') : ?>
@@ -66,12 +66,19 @@ $columnSize = 12 / $columnsTotal;
                     <?php if ($online_chat_enabled_pre == true && $closedTabEnabled == true) : ?>                
                         <?php include(erLhcoreClassDesign::designtpl('lhfront/dashboard/panels/closed_chats.tpl.php'));?>
                     <?php endif;?>
+                    
+                <?php elseif ($wiget == 'my_chats') : ?>  
+                  
+                    <?php if ($mchatsTabEnabled == true) : ?>             
+                        <?php include(erLhcoreClassDesign::designtpl('lhfront/dashboard/panels/my_chats.tpl.php'));?>
+                    <?php endif;?>
+                    
                 <?php else : ?>
                     <?php include(erLhcoreClassDesign::designtpl('lhfront/dashboard/panels/extension_panel_multiinclude.tpl.php'));?>
                 <?php endif;?>
             <?php endforeach;?>           
             
         </div>
-     <?php endfor;?>
+     <?php endforeach;?>
 </div>
 <?php $popoverInitialized = true; ?>

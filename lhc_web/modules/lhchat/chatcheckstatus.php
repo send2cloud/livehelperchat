@@ -8,7 +8,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate' );
 header('Cache-Control: post-check=0, pre-check=0', false );
 header('Pragma: no-cache' );
 
-if ($Params['user_parameters_unordered']['wopen'] != 1)
+if ($Params['user_parameters_unordered']['wopen'] != 1 || ($Params['user_parameters_unordered']['isproactive'] == 1 && $Params['user_parameters_unordered']['wopen'] == 1))
 {
     $tpl = erLhcoreClassTemplate::getInstance('lhchat/chatcheckstatus.tpl.php');
     
@@ -22,6 +22,8 @@ if ($Params['user_parameters_unordered']['wopen'] != 1)
     }
     
     $tpl->set('status',$Params['user_parameters_unordered']['status'] == 'true' ? true : false);
+    $tpl->set('hide_offline',$Params['user_parameters_unordered']['hide_offline'] == 'true' ? true : false);
+    $tpl->set('isproactive',$Params['user_parameters_unordered']['isproactive'] == 1 ? true : false);
     
     echo $tpl->fetch();
 }
@@ -61,7 +63,7 @@ if (erLhcoreClassModelChatConfig::fetch('track_is_online')->current_value && $Pa
 			        list($chatId) = explode('_', (string)$Params['user_parameters_unordered']['hash_resume']);
 			    }
 			    
-			    if (is_numeric($chatId)) {
+			    if (isset($chatId) && is_numeric($chatId)) {
 			         erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.data_changed_chat',array('chat_id' => $chatId));
 			    }
 			}

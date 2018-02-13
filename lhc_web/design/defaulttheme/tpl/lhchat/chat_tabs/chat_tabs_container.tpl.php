@@ -2,12 +2,11 @@
 	<ul class="nav nav-pills" role="tablist" id="chat-tab-items-<?php echo $chat->id?>">	
 	    <?php include(erLhcoreClassDesign::designtpl('lhchat/chat_tabs/tabs_order.tpl.php')); ?>
 		    
-	    <?php 
+	    <?php
 	    /**
 	     * We cannot use some key => tpl here because we want template compilator to compile everything to single tpl file
 	     * */	    
-	    foreach ($chatTabsOrder as $tabItem) :
-        ?>
+	    foreach ($chatTabsOrder as $tabItem) : ?>
 	       <?php if ($tabItem == 'information_tab_tab') : ?>
 	       <?php include(erLhcoreClassDesign::designtpl('lhchat/chat_tabs/information_tab_tab.tpl.php')); ?>
 	       <?php elseif ($tabItem == 'chat_translation_tab') : ?>
@@ -19,7 +18,7 @@
 	    <?php if ( isset($fileData['active_admin_upload']) && $fileData['active_admin_upload'] == true && erLhcoreClassUser::instance()->hasAccessTo('lhfile','use_operator') ) : ?>
 	    <?php include(erLhcoreClassDesign::designtpl('lhchat/chat_tabs/information_tab_user_files_tab.tpl.php'));?>	
 	    <?php endif; ?>
-	       <?php elseif ($tabItem == 'operator_screenshot_tab') : ?>
+	       <?php elseif ($tabItem == 'operator_screenshot_tab' && $canEditChat == true) : ?>
 	       <?php include(erLhcoreClassDesign::designtpl('lhchat/chat_tabs/operator_screenshot_tab.tpl.php'));?>
 	       <?php elseif ($tabItem == 'footprint_tab_tab') : ?>
 	       <?php include(erLhcoreClassDesign::designtpl('lhchat/chat_tabs/footprint_tab_tab.tpl.php')); ?>

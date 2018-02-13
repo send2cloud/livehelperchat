@@ -1,4 +1,5 @@
 <?php
+header('content-type: application/json; charset=utf-8');
 
 $definition = array(
         'msg' => new ezcInputFormDefinitionElement(
@@ -10,38 +11,56 @@ $form = new ezcInputForm( INPUT_POST, $definition );
 $r = '';
 $error = 'f';
 
-if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && mb_strlen($form->msg) < (int)erLhcoreClassModelChatConfig::fetch('max_message_length')->current_value)
+if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && trim(str_replace('[[msgitm]]', '',$form->msg)) != '' && mb_strlen($form->msg) < (int)erLhcoreClassModelChatConfig::fetch('max_message_length')->current_value)
 {
 	try {
-	    $chat = erLhcoreClassChat::getSession()->load( 'erLhcoreClassModelChat', $Params['user_parameters']['chat_id']);	
+	    $db = ezcDbInstance::get();
+	     
+	    $db->beginTransaction();
 	    
-	    if ($chat->hash == $Params['user_parameters']['hash'] && ($chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT || $chat->status == erLhcoreClassModelChat::STATUS_ACTIVE_CHAT)) // Allow add messages only if chat is active
-	    {
-	        $db = ezcDbInstance::get();
-	        
-	        $db->beginTransaction();
-	        
+	    $chat = erLhcoreClassModelChat::fetchAndLock($Params['user_parameters']['chat_id']);	
+
+	    $validStatuses = array(
+            erLhcoreClassModelChat::STATUS_PENDING_CHAT,
+            erLhcoreClassModelChat::STATUS_ACTIVE_CHAT,
+        );
+
+        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.validstatus_chat',array('chat' => & $chat, 'valid_statuses' => & $validStatuses));
+
+	    if ($chat->hash == $Params['user_parameters']['hash'] && (in_array($chat->status,$validStatuses)) && !in_array($chat->status_sub, array(erLhcoreClassModelChat::STATUS_SUB_SURVEY_SHOW,erLhcoreClassModelChat::STATUS_SUB_CONTACT_FORM))) // Allow add messages only if chat is active
+	    {	        	        
 	        $messagesToStore = explode('[[msgitm]]', trim($form->msg));
 	        
 	        foreach ($messagesToStore as $messageText)
 	        {
-    	        $msg = new erLhcoreClassModelmsg();
-    	        $msg->msg = trim($messageText);
-    	        $msg->chat_id = $Params['user_parameters']['chat_id'];
-    	        $msg->user_id = 0;
-    	        $msg->time = time();
-    	
-    	        if ($chat->chat_locale != '' && $chat->chat_locale_to != '') {
-    	            erLhcoreClassTranslate::translateChatMsgVisitor($chat, $msg);
-    	        }
+	            if (trim($messageText) != '')
+                {
+                    $msg = new erLhcoreClassModelmsg();
+                    $msg->msg = trim($messageText);
+                    $msg->chat_id = $Params['user_parameters']['chat_id'];
+                    $msg->user_id = 0;
+                    $msg->time = time();
 
-                erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_msg_user_saved',array('msg' => & $msg,'chat' => & $chat));
+                    if ($chat->chat_locale != '' && $chat->chat_locale_to != '') {
+                        erLhcoreClassTranslate::translateChatMsgVisitor($chat, $msg);
+                    }
 
-    	        erLhcoreClassChat::getSession()->save($msg);
+                    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.before_msg_user_saved',array('msg' => & $msg,'chat' => & $chat));
+
+                    erLhcoreClassChat::getSession()->save($msg);
+                }
 	        }
 
-	        $stmt = $db->prepare('UPDATE lh_chat SET last_user_msg_time = :last_user_msg_time, last_msg_id = :last_msg_id, has_unread_messages = 1, unanswered_chat = :unanswered_chat WHERE id = :id');
-	        $stmt->bindValue(':id',$chat->id, PDO::PARAM_INT);
+	        if (!isset($msg)){
+                $error = 't';
+                $r = erTranslationClassLhTranslation::getInstance()->getTranslation('chat/startchat','Please enter a message, max characters').' - '.(int)erLhcoreClassModelChatConfig::fetch('max_message_length')->current_value;
+                echo erLhcoreClassChat::safe_json_encode(array('error' => $error, 'r' => $r));
+                exit;
+            }
+
+	        $stmt = $db->prepare('UPDATE lh_chat SET last_user_msg_time = :last_user_msg_time, lsync = :lsync, last_msg_id = :last_msg_id, has_unread_messages = 1, unanswered_chat = :unanswered_chat WHERE id = :id');
+	        $stmt->bindValue(':id', $chat->id, PDO::PARAM_INT);
+	        $stmt->bindValue(':lsync', time(), PDO::PARAM_INT);
 	        $stmt->bindValue(':last_user_msg_time', $msg->time, PDO::PARAM_INT);
 	        $stmt->bindValue(':unanswered_chat',($chat->status == erLhcoreClassModelChat::STATUS_PENDING_CHAT ? 1 : 0), PDO::PARAM_INT);
 
@@ -57,25 +76,15 @@ if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && mb_strlen($form->m
 	        if ($chat->has_unread_messages == 1 && $chat->last_user_msg_time < (time() - 5)) {
 	        	erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.unread_chat',array('chat' => & $chat));
 	        }
-	        
-	        $db->commit();
-	    }	    
-	    
-	    echo json_encode(array('error' => $error, 'r' => $r));
-	   	
-	    flush();
-	    
-	    session_write_close();
-	    
-	    if ( function_exists('fastcgi_finish_request') ) {
-	        fastcgi_finish_request();
-	    };
 
-	    // Assign to last message all the texts
-	    $msg->msg = trim(implode("\n", $messagesToStore));
-	    
-	    erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.addmsguser',array('chat' => & $chat, 'msg' => & $msg));
-	    
+            // Assign to last message all the texts
+            $msg->msg = trim(implode("\n", $messagesToStore));
+
+            erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.addmsguser',array('chat' => & $chat, 'msg' => & $msg));
+	    } else {
+	        throw new Exception(erTranslationClassLhTranslation::getInstance()->getTranslation('chat/startchat','You cannot send messages to this chat. Please refresh your browser.'));
+        }
+
 	    // Initialize auto responder if required
 	    if ($chat->status_sub == erLhcoreClassModelChat::STATUS_SUB_START_ON_KEY_UP)
 	    {
@@ -94,10 +103,11 @@ if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && mb_strlen($form->m
 	            }
 	            
 	            // Store wait timeout attribute for future
-	            $chat->wait_timeout = $chat->online_user->invitation->wait_timeout;
+                // @todo fix me
+	            /*$chat->wait_timeout = $chat->online_user->invitation->wait_timeout;
 	            $chat->timeout_message = $chat->online_user->invitation->timeout_message;
 	            $chat->wait_timeout_send = 1-$chat->online_user->invitation->repeat_number;
-	            $chat->wait_timeout_repeat = $chat->online_user->invitation->repeat_number;
+	            $chat->wait_timeout_repeat = $chat->online_user->invitation->repeat_number;*/
 	            
 	            $chat->status_sub = erLhcoreClassModelChat::STATUS_SUB_DEFAULT;
 	            $chat->time = time(); // Update initial chat start time for auto responder
@@ -105,7 +115,9 @@ if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && mb_strlen($form->m
 	            
 	            erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.auto_responder_triggered',array('chat' => & $chat));
 	            
-	        } else {
+	        }
+	        // @todo fix me
+	        /* else {
         	    // Auto responder
         	    $responder = erLhAbstractModelAutoResponder::processAutoResponder($chat);
         	    
@@ -135,20 +147,23 @@ if ($form->hasValidData( 'msg' ) && trim($form->msg) != '' && mb_strlen($form->m
         	    
         	        erLhcoreClassChatEventDispatcher::getInstance()->dispatch('chat.auto_responder_triggered',array('chat' => & $chat));
         	    }
-	        }
+	        }*/
 	    }
 	    
-	    
+	    $db->commit();
+	    echo erLhcoreClassChat::safe_json_encode(array('error' => $error, 'r' => $r));
 	    exit;
 	    
 	} catch (Exception $e) {
-   		$db->rollback();
+        $db->rollback();
+        echo erLhcoreClassChat::safe_json_encode(array('error' => 't', 'r' => $e->getMessage()));
+        exit;
     }
     
 } else {
 	$error = 't';
 	$r = erTranslationClassLhTranslation::getInstance()->getTranslation('chat/startchat','Please enter a message, max characters').' - '.(int)erLhcoreClassModelChatConfig::fetch('max_message_length')->current_value;
-	echo json_encode(array('error' => $error, 'r' => $r));
+	echo erLhcoreClassChat::safe_json_encode(array('error' => $error, 'r' => $r));
 	exit;
 }
 
